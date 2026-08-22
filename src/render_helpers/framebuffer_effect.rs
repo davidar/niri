@@ -409,7 +409,13 @@ impl RenderElement<GlesRenderer> for FramebufferEffectElement {
         let program = Shaders::get_from_frame(frame).postprocess_and_clip.clone();
 
         let masked = match &self.mask {
-            Some(mask) if program.is_some() => mask.bind(frame)?,
+            Some(mask) if program.is_some() => {
+                let bound = mask.bind(frame)?;
+                if !bound {
+                    crate::render_helpers::effect_mask::log_unbindable();
+                }
+                bound
+            }
             _ => false,
         };
 
