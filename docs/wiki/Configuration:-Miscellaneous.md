@@ -407,3 +407,19 @@ blur {
     saturation 1.5
 }
 ```
+
+### `security-context`
+
+Clients that connect through a [`wp_security_context_v1`](https://wayland.app/protocols/security-context-v1) listener (Flatpak sandboxes, for example) are restricted: they do not see privileged globals such as foreign-toplevel management, workspaces, screencopy or output management.
+
+Some desktop components hand out security-context sockets to processes they supervise themselves, such as a panel launching its applets.
+List such a component's sandbox engine name here and the clients it brings in get the same globals as a direct connection.
+Only unrestricted clients can create security contexts, so a sandboxed client cannot label itself as trusted.
+
+```kdl
+security-context {
+    trust-sandbox-engine "com.system76.CosmicPanel"
+}
+```
+
+Changes apply to new connections.

@@ -95,6 +95,7 @@ pub struct Config {
     pub workspaces: Vec<Workspace>,
     pub recent_windows: RecentWindows,
     pub timeouts: Timeouts,
+    pub security_context: SecurityContext,
 }
 
 #[derive(Debug, Clone)]
@@ -249,6 +250,11 @@ where
                 "timeouts" => {
                     let part = TimeoutsPart::decode_node(node, ctx)?;
                     config.borrow_mut().timeouts.merge_with(&part);
+                }
+
+                "security-context" => {
+                    let part = SecurityContextPart::decode_node(node, ctx)?;
+                    config.borrow_mut().security_context.merge_with(&part);
                 }
 
                 "layout" => {
@@ -2480,6 +2486,9 @@ mod tests {
             timeouts: Timeouts {
                 xdg_activation_token_ms: 10000,
                 lock_surface_ms: 1000,
+            },
+            security_context: SecurityContext {
+                trusted_sandbox_engines: [],
             },
         }
         "#);

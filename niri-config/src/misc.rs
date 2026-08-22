@@ -189,6 +189,32 @@ impl MergeWith<TimeoutsPart> for Timeouts {
     }
 }
 
+/// Trust policy for clients connecting through security contexts.
+///
+/// Clients that arrive through a `wp_security_context_v1` listener are restricted by default:
+/// they do not see privileged globals such as foreign-toplevel management, workspaces, screencopy
+/// or output management. A sandbox engine listed here is trusted, and clients it brings in get
+/// the same globals as a direct connection. Only unrestricted clients can create security
+/// contexts, so a sandboxed client cannot label itself.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct SecurityContext {
+    /// Sandbox engine names (as set with `set_sandbox_engine`) whose clients are unrestricted.
+    pub trusted_sandbox_engines: Vec<String>,
+}
+
+#[derive(knuffel::Decode, Debug, Default, Clone, PartialEq, Eq)]
+pub struct SecurityContextPart {
+    #[knuffel(children(name = "trust-sandbox-engine"), unwrap(argument))]
+    pub trusted_sandbox_engines: Vec<String>,
+}
+
+impl MergeWith<SecurityContextPart> for SecurityContext {
+    fn merge_with(&mut self, part: &SecurityContextPart) {
+        self.trusted_sandbox_engines
+            .extend(part.trusted_sandbox_engines.iter().cloned());
+    }
+}
+
 #[derive(knuffel::Decode, Debug, Default, Clone, PartialEq, Eq)]
 pub struct Environment(#[knuffel(children)] pub Vec<EnvironmentVariable>);
 

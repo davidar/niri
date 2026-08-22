@@ -507,10 +507,20 @@ impl SecurityContextHandler for State {
         self.niri
             .event_loop
             .insert_source(source, move |client, _, state| {
-                trace!("inserting a new restricted client, context={context:?}");
+                // Clients from a trusted sandbox engine get the unrestricted globals; everything
+                // else arriving through a security context stays restricted.
+                let trusted = context.sandbox_engine.as_ref().is_some_and(|engine| {
+                    let config = state.niri.config.borrow();
+                    config.security_context.trusted_sandbox_engines.contains(engine)
+                });
+                if trusted {
+                    trace!("inserting a new client from a trusted sandbox, context={context:?}");
+                } else {
+                    trace!("inserting a new restricted client, context={context:?}");
+                }
                 state.niri.insert_client(NewClient {
                     client,
-                    restricted: true,
+                    restricted: !trusted,
                     credentials_unknown: false,
                 });
             })
