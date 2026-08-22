@@ -41,6 +41,7 @@ pub struct Options {
     pub blur: bool,
     pub xray: bool,
     pub mask: bool,
+    pub mask_threshold: f64,
     pub noise: Option<f64>,
     pub saturation: Option<f64>,
 }
@@ -135,6 +136,9 @@ impl BackgroundEffect {
             blur,
             xray: effect.xray == Some(true),
             mask: effect.mask != Some(false),
+            mask_threshold: effect
+                .mask_threshold
+                .unwrap_or(niri_config::DEFAULT_MASK_THRESHOLD),
             noise: effect.noise,
             saturation: effect.saturation,
         };
@@ -172,6 +176,10 @@ impl BackgroundEffect {
 
     pub fn masks(&self) -> bool {
         self.options.mask
+    }
+
+    pub fn mask_threshold(&self) -> f64 {
+        self.options.mask_threshold
     }
 
     pub fn render(
@@ -362,7 +370,12 @@ pub fn render_for_tile(
         // Blocked-out windows are drawn as solid rectangles, so masking by their real shape would
         // leak exactly what blocking out is meant to hide.
         if background_effect.masks() && !should_block_out {
-            params.mask = EffectMask::for_surface(states, &context_id, surface_rect);
+            params.mask = EffectMask::for_surface(
+                states,
+                &context_id,
+                surface_rect,
+                background_effect.mask_threshold(),
+            );
         }
         background_effect.update_mask(params.mask.is_some());
 

@@ -20,14 +20,6 @@ use crate::render_helpers::shaders::mat3_uniform;
 /// free for us to use.
 const MASK_TEXTURE_UNIT: i32 = 1;
 
-/// Alpha at which the mask reaches full coverage.
-///
-/// A translucent surface still covers its pixels completely, it just lets some light through, so
-/// the effect below it must be drawn at full strength; only fully transparent pixels get no
-/// effect. The threshold is not zero purely to keep client-side antialiased edges from turning
-/// into a staircase.
-const FULL_COVERAGE_ALPHA: f32 = 0.25;
-
 /// A surface texture used to mask a background effect.
 #[derive(Debug, Clone)]
 pub struct EffectMask {
@@ -37,18 +29,27 @@ pub struct EffectMask {
     pub rect: Rectangle<f64, Logical>,
     /// Maps [0, 1] coordinates within `rect` to texture coordinates.
     pub rect_to_tex: Mat3,
+    /// Alpha at which the mask reaches full coverage.
+    ///
+    /// A translucent surface still covers its pixels completely, it just lets some light through,
+    /// so the effect below it must be drawn at full strength; only fully transparent pixels get
+    /// no effect. A nonzero threshold keeps client-side antialiased edges from turning into a
+    /// staircase. Configured per rule as `mask-threshold`.
+    pub full_coverage_alpha: f32,
 }
 
 impl EffectMask {
     /// Builds a mask from a surface's current buffer.
     ///
-    /// `rect` is where the surface is drawn, in the coordinate space of the effect geometry.
-    /// Returns `None` if the surface has no texture in this renderer, which happens before its
-    /// first commit is imported.
+    /// `rect` is where the surface is drawn, in the coordinate space of the effect geometry, and
+    /// `full_coverage_alpha` is the alpha at which the mask saturates. Returns `None` if the
+    /// surface has no texture in this renderer, which happens before its first commit is
+    /// imported.
     pub fn for_surface(
         states: &SurfaceData,
         context_id: &ContextId<GlesTexture>,
         rect: Rectangle<f64, Logical>,
+        full_coverage_alpha: f64,
     ) -> Option<Self> {
         if rect.size.w <= 0. || rect.size.h <= 0. {
             return None;
@@ -113,6 +114,7 @@ impl EffectMask {
             texture,
             rect,
             rect_to_tex: rect_to_tex.into(),
+            full_coverage_alpha: full_coverage_alpha as f32,
         })
     }
 
@@ -121,7 +123,9 @@ impl EffectMask {
         [
             Uniform::new("niri_mask_tex", MASK_TEXTURE_UNIT),
             mat3_uniform("niri_input_to_mask", self.rect_to_tex * input_to_rect),
-            Uniform::new("niri_mask", 1. / FULL_COVERAGE_ALPHA),
+            // A zero threshold means any nonzero alpha is full coverage; keep the reciprocal
+            // finite so the shader never multiplies zero by infinity.
+            Uniform::new("niri_mask", 1. / self.full_coverage_alpha.max(f32::EPSILON)),
         ]
     }
 

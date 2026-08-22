@@ -52,6 +52,8 @@ Translucent surfaces still get the full effect: only fully transparent pixels ar
 
 Masking is on by default and can be turned off per window or layer surface with the `mask false` background effect rule, which draws the effect over the entire requested region instead.
 
+The mask is coverage, not opacity: a translucent surface still gets the effect at full strength, and only pixels below the `mask-threshold` alpha (default `0.25`) ramp down to no effect, so client-side antialiased edges stay smooth.
+
 ```kdl
 window-rule {
     match app-id="firefox"

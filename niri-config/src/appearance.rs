@@ -1064,6 +1064,8 @@ pub struct BackgroundEffectRule {
     #[knuffel(child, unwrap(argument))]
     pub mask: Option<bool>,
     #[knuffel(child, unwrap(argument))]
+    pub mask_threshold: Option<FloatOrInt<0, 1>>,
+    #[knuffel(child, unwrap(argument))]
     pub noise: Option<FloatOrInt<0, 1000>>,
     #[knuffel(child, unwrap(argument))]
     pub saturation: Option<FloatOrInt<0, 1000>>,
@@ -1097,13 +1099,27 @@ pub struct BackgroundEffect {
     /// - `Some(false)`: draw the effect over the whole region
     pub mask: Option<bool>,
 
+    /// Surface alpha at which the mask reaches full coverage.
+    ///
+    /// Alpha below this ramps the effect down to nothing; at or above it the effect is drawn at
+    /// full strength. A small value keeps translucent surfaces fully blurred while still giving
+    /// client-side antialiased edges a short ramp. `None` means [`DEFAULT_MASK_THRESHOLD`].
+    pub mask_threshold: Option<f64>,
+
     pub noise: Option<f64>,
     pub saturation: Option<f64>,
 }
 
+/// Default for [`BackgroundEffect::mask_threshold`].
+pub const DEFAULT_MASK_THRESHOLD: f64 = 0.25;
+
 impl MergeWith<BackgroundEffectRule> for BackgroundEffect {
     fn merge_with(&mut self, part: &BackgroundEffectRule) {
         merge_clone_opt!((self, part), xray, blur, mask);
+
+        if let Some(x) = part.mask_threshold {
+            self.mask_threshold = Some(x.0);
+        }
 
         if let Some(x) = part.noise {
             self.noise = Some(x.0);

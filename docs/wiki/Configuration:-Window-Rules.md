@@ -969,6 +969,7 @@ Override the background effect options for this window.
 - `xray`: set to `true` to enable the xray effect, or `false` to disable it.
 - `blur`: set to `true` to enable blur behind this window, or `false` to force-disable it.
 - `mask`: set to `false` to draw the effect over the whole requested region, rather than only where the window itself is not fully transparent.
+- `mask-threshold`: surface alpha at which the mask reaches full coverage (default `0.25`). Alpha below it ramps the effect down to nothing; a small value keeps translucent surfaces fully blurred while antialiased edges still get a short ramp.
 - `noise`: amount of pixel noise added to the background (helps with color banding from blur).
 - `saturation`: color saturation of the background (`0` is desaturated, `1` is normal, `2` is 200% saturation).
 
