@@ -1062,6 +1062,8 @@ pub struct BackgroundEffectRule {
     #[knuffel(child, unwrap(argument))]
     pub blur: Option<bool>,
     #[knuffel(child, unwrap(argument))]
+    pub mask: Option<bool>,
+    #[knuffel(child, unwrap(argument))]
     pub noise: Option<FloatOrInt<0, 1000>>,
     #[knuffel(child, unwrap(argument))]
     pub saturation: Option<FloatOrInt<0, 1000>>,
@@ -1085,13 +1087,23 @@ pub struct BackgroundEffect {
     /// - `Some(true)`: always blur
     pub blur: Option<bool>,
 
+    /// Whether to mask the effect by the surface's own alpha.
+    ///
+    /// Clients that draw rounded corners themselves leave the corner pixels fully transparent,
+    /// but request the effect over a rectangular region. Masking limits the effect to pixels the
+    /// surface actually covers, so the corners show the unaffected background.
+    ///
+    /// - `None` or `Some(true)`: mask by surface alpha
+    /// - `Some(false)`: draw the effect over the whole region
+    pub mask: Option<bool>,
+
     pub noise: Option<f64>,
     pub saturation: Option<f64>,
 }
 
 impl MergeWith<BackgroundEffectRule> for BackgroundEffect {
     fn merge_with(&mut self, part: &BackgroundEffectRule) {
-        merge_clone_opt!((self, part), xray, blur);
+        merge_clone_opt!((self, part), xray, blur, mask);
 
         if let Some(x) = part.noise {
             self.noise = Some(x.0);

@@ -42,6 +42,26 @@ Blur enabled via the window rule will follow the window corner radius set via [`
 On the other hand, blur enabled through `ext-background-effect` will exactly follow the shape requested by the window.
 If the window or layer has clientside rounded corners or other complex shape, it should set a corresponding blur shape through `ext-background-effect`, then it will get correctly shaped background blur without any manual niri configuration.
 
+### Masking
+
+Not every application requests a shape that matches what it draws.
+A common case is clientside rounded corners with a plain rectangular blur region, which leaves square blur corners poking out from behind the window.
+
+To handle this, niri masks background effects by the alpha of the surface they are drawn under, so that the effect only covers pixels the surface actually paints.
+Translucent surfaces still get the full effect: only fully transparent pixels are left alone.
+
+Masking is on by default and can be turned off per window or layer surface with the `mask false` background effect rule, which draws the effect over the entire requested region instead.
+
+```kdl
+window-rule {
+    match app-id="firefox"
+
+    background-effect {
+        mask false
+    }
+}
+```
+
 Windows can also blur their pop-up menus using `ext-background-effect`.
 On the niri side, you can do it with a `popups` block inside [`window-rule`](./Configuration:-Window-Rules.md#popups) and [`layer-rule`](./Configuration:-Layer-Rules.md#popups).
 See those wiki pages for examples and limitations.

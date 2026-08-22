@@ -104,6 +104,7 @@ window-rule {
     background-effect {
         xray true
         blur true
+        mask false
         noise 0.05
         saturation 3
     }
@@ -115,6 +116,7 @@ window-rule {
         background-effect {
             xray true
             blur true
+            mask false
             noise 0.05
             saturation 3
         }
@@ -966,6 +968,7 @@ Override the background effect options for this window.
 
 - `xray`: set to `true` to enable the xray effect, or `false` to disable it.
 - `blur`: set to `true` to enable blur behind this window, or `false` to force-disable it.
+- `mask`: set to `false` to draw the effect over the whole requested region, rather than only where the window itself is not fully transparent.
 - `noise`: amount of pixel noise added to the background (helps with color banding from blur).
 - `saturation`: color saturation of the background (`0` is desaturated, `1` is normal, `2` is 200% saturation).
 

@@ -2,6 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use niri_config::CornerRadius;
 use smithay::backend::renderer::gles::GlesRenderer;
+use smithay::backend::renderer::Renderer as _;
 use smithay::utils::{Logical, Point, Rectangle, Scale};
 use smithay::wayland::compositor::{with_states, SurfaceData};
 use wayland_server::protocol::wl_surface::WlSurface;
@@ -10,6 +11,7 @@ use crate::handlers::background_effect::get_cached_blur_region;
 use crate::niri_render_elements;
 use crate::render_helpers::blur::BlurOptions;
 use crate::render_helpers::damage::ExtraDamage;
+use crate::render_helpers::effect_mask::EffectMask;
 use crate::render_helpers::framebuffer_effect::{FramebufferEffect, FramebufferEffectElement};
 use crate::render_helpers::xray::{XrayElement, XrayPos};
 use crate::render_helpers::RenderCtx;
@@ -28,12 +30,17 @@ pub struct BackgroundEffect {
     corner_radius: CornerRadius,
     blur_config: niri_config::Blur,
     options: Options,
+    /// Whether the effect was last rendered with a mask.
+    ///
+    /// Stored here to damage when a surface gains or loses its texture.
+    mask_active: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Options {
     pub blur: bool,
     pub xray: bool,
+    pub mask: bool,
     pub noise: Option<f64>,
     pub saturation: Option<f64>,
 }
@@ -60,6 +67,8 @@ pub struct RenderParams {
     pub clip: Option<(Rectangle<f64, Logical>, CornerRadius)>,
     /// Scale to use for rounding to physical pixels.
     pub scale: f64,
+    /// Mask limiting the effect to the surface's own coverage.
+    pub mask: Option<EffectMask>,
 }
 
 impl RenderParams {
@@ -89,6 +98,7 @@ impl BackgroundEffect {
             corner_radius: CornerRadius::default(),
             blur_config: niri_config::Blur::default(),
             options: Options::default(),
+            mask_active: false,
         }
     }
 
@@ -124,6 +134,7 @@ impl BackgroundEffect {
         let mut options = Options {
             blur,
             xray: effect.xray == Some(true),
+            mask: effect.mask != Some(false),
             noise: effect.noise,
             saturation: effect.saturation,
         };
@@ -144,8 +155,23 @@ impl BackgroundEffect {
         self.nonxray.damage();
     }
 
+    /// Damages the effect when it starts or stops being masked.
+    pub fn update_mask(&mut self, active: bool) {
+        if self.mask_active == active {
+            return;
+        }
+
+        self.mask_active = active;
+        self.damage.damage_all();
+        self.nonxray.damage();
+    }
+
     pub fn is_visible(&self) -> bool {
         self.options.is_visible()
+    }
+
+    pub fn masks(&self) -> bool {
+        self.options.mask
     }
 
     pub fn render(
@@ -205,13 +231,15 @@ impl BackgroundEffect {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_params_for_tile(
     geometry: Rectangle<f64, Logical>,
     scale: f64,
     clip_to_geometry: bool,
     block_out: bool,
     blur_region: Option<Arc<Vec<Rectangle<i32, Logical>>>>,
-    surface_geo: Rectangle<f64, Logical>,
+    surface_loc: Point<f64, Logical>,
+    surface_rect: Rectangle<f64, Logical>,
     surface_anim_scale: Scale<f64>,
 ) -> Option<RenderParams> {
     // Effects not requested by the surface itself are drawn to match the geometry.
@@ -233,19 +261,13 @@ fn render_params_for_tile(
             if block_out {
                 clip = true;
             } else {
-                let mut surface_geo = surface_geo.upscale(surface_anim_scale);
-                surface_geo.loc += geometry.loc;
-
                 subregion = Some(TransformedRegion {
                     rects,
                     scale: surface_anim_scale,
-                    offset: surface_geo.loc,
+                    offset: surface_loc,
                 });
 
-                surface_geo = surface_geo
-                    .to_physical_precise_round(scale)
-                    .to_logical(scale);
-                effect_geometry = surface_geo;
+                effect_geometry = surface_rect;
             }
         }
     }
@@ -258,6 +280,7 @@ fn render_params_for_tile(
         subregion,
         clip,
         scale,
+        mask: None,
     })
 }
 
@@ -297,6 +320,8 @@ pub fn render_for_tile(
     xray_pos: XrayPos,
     push: &mut dyn FnMut(BackgroundEffectElement),
 ) {
+    let context_id = ctx.renderer.context_id();
+
     with_states(surface, |states| {
         let background_effect = SurfaceBackgroundEffect::get(states);
         let mut background_effect = background_effect.0.lock().unwrap();
@@ -311,20 +336,35 @@ pub fn render_for_tile(
             return;
         }
 
-        let mut surface_geo = surface_geo(states).unwrap_or_default().to_f64();
-        surface_geo.loc += surface_off;
+        // Where the surface is drawn, in the same coordinate space as the geometry.
+        let mut surface_rect = surface_geo(states).unwrap_or_default().to_f64();
+        surface_rect.loc += surface_off;
+        let mut surface_rect = surface_rect.upscale(surface_anim_scale);
+        surface_rect.loc += geometry.loc;
+        let surface_loc = surface_rect.loc;
+        let surface_rect = surface_rect
+            .to_physical_precise_round(scale)
+            .to_logical(scale);
 
-        let Some(params) = render_params_for_tile(
+        let Some(mut params) = render_params_for_tile(
             geometry,
             scale,
             clip_to_geometry,
             should_block_out,
             blur_region,
-            surface_geo,
+            surface_loc,
+            surface_rect,
             surface_anim_scale,
         ) else {
             return;
         };
+
+        // Blocked-out windows are drawn as solid rectangles, so masking by their real shape would
+        // leak exactly what blocking out is meant to hide.
+        if background_effect.masks() && !should_block_out {
+            params.mask = EffectMask::for_surface(states, &context_id, surface_rect);
+        }
+        background_effect.update_mask(params.mask.is_some());
 
         let xray_pos = xray_pos.offset(params.geometry.loc - geometry.loc);
         background_effect.render(ctx, ns, params, xray_pos, push);

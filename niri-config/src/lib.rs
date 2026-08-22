@@ -1960,6 +1960,7 @@ mod tests {
                     background_effect: BackgroundEffectRule {
                         xray: None,
                         blur: None,
+                        mask: None,
                         noise: None,
                         saturation: None,
                     },
@@ -1969,6 +1970,7 @@ mod tests {
                         background_effect: BackgroundEffectRule {
                             xray: None,
                             blur: None,
+                            mask: None,
                             noise: None,
                             saturation: None,
                         },
@@ -2011,6 +2013,7 @@ mod tests {
                     background_effect: BackgroundEffectRule {
                         xray: None,
                         blur: None,
+                        mask: None,
                         noise: None,
                         saturation: None,
                     },
@@ -2020,6 +2023,7 @@ mod tests {
                         background_effect: BackgroundEffectRule {
                             xray: None,
                             blur: None,
+                            mask: None,
                             noise: None,
                             saturation: None,
                         },

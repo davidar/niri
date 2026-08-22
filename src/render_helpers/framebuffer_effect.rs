@@ -16,6 +16,7 @@ use smithay::utils::{Buffer, Logical, Physical, Rectangle, Scale, Transform};
 use crate::backend::tty::{TtyFrame, TtyRenderer, TtyRendererError};
 use crate::render_helpers::background_effect::RenderParams;
 use crate::render_helpers::blur::{Blur, BlurOptions};
+use crate::render_helpers::effect_mask::{disabled_uniforms, EffectMask};
 use crate::render_helpers::renderer::AsGlesFrame as _;
 use crate::render_helpers::shaders::{mat3_uniform, Shaders};
 use crate::utils::region::TransformedRegion;
@@ -38,6 +39,7 @@ pub struct FramebufferEffectElement {
     blur_options: Option<BlurOptions>,
     noise: f32,
     saturation: f32,
+    mask: Option<EffectMask>,
 }
 
 #[derive(Debug)]
@@ -89,6 +91,7 @@ impl FramebufferEffect {
             blur_options,
             noise,
             saturation,
+            mask: params.mask,
         }
     }
 }
@@ -98,21 +101,33 @@ impl FramebufferEffectElement {
         &self,
         crop: Rectangle<f64, Logical>,
         transform: Transform,
-    ) -> [Uniform<'static>; 7] {
-        let offset = crop.loc - (self.clip_geo.loc - self.geometry.loc);
-        let offset = Vec2::new(offset.x as f32, offset.y as f32);
+        masked: bool,
+    ) -> [Uniform<'static>; 10] {
         let crop_size = Vec2::new(crop.size.w as f32, crop.size.h as f32);
-        let clip_size = Vec2::new(self.clip_geo.size.w as f32, self.clip_geo.size.h as f32);
-
-        // Our v_coords are [0, 1] inside crop. We want them to be [0, 1] inside clip_geo.
-        let input_to_clip_geo =
-            Mat3::from_scale(crop_size / clip_size) * Mat3::from_translation(offset / crop_size);
 
         // Revert the effect of the texture transform.
         let transform_mat = Mat3::from_translation(Vec2::new(0.5, 0.5))
             * transform.matrix()
             * Mat3::from_translation(Vec2::new(-0.5, -0.5));
-        let input_to_clip_geo = input_to_clip_geo * transform_mat;
+
+        // Our v_coords are [0, 1] inside crop. This maps them to [0, 1] inside `rect`.
+        let input_to_rect = |rect: Rectangle<f64, Logical>| {
+            let offset = crop.loc - (rect.loc - self.geometry.loc);
+            let offset = Vec2::new(offset.x as f32, offset.y as f32);
+            let size = Vec2::new(rect.size.w as f32, rect.size.h as f32);
+
+            Mat3::from_scale(crop_size / size)
+                * Mat3::from_translation(offset / crop_size)
+                * transform_mat
+        };
+
+        let input_to_clip_geo = input_to_rect(self.clip_geo);
+
+        let mask = match &self.mask {
+            Some(mask) if masked => mask.uniforms(input_to_rect(mask.rect)),
+            _ => disabled_uniforms(),
+        };
+        let [mask_tex, input_to_mask, mask_enabled] = mask;
 
         let clip_geo_size = (self.clip_geo.size.w as f32, self.clip_geo.size.h as f32);
 
@@ -124,6 +139,9 @@ impl FramebufferEffectElement {
             Uniform::new("noise", self.noise),
             Uniform::new("saturation", self.saturation),
             Uniform::new("bg_color", [0f32, 0., 0., 0.]),
+            mask_tex,
+            input_to_mask,
+            mask_enabled,
         ]
     }
 }
@@ -389,12 +407,18 @@ impl RenderElement<GlesRenderer> for FramebufferEffectElement {
         );
 
         let program = Shaders::get_from_frame(frame).postprocess_and_clip.clone();
+
+        let masked = match &self.mask {
+            Some(mask) if program.is_some() => mask.bind(frame)?,
+            _ => false,
+        };
+
         let uniforms = program
             .is_some()
-            .then(|| self.compute_uniforms(crop, frame.transformation()));
+            .then(|| self.compute_uniforms(crop, frame.transformation(), masked));
         let uniforms = uniforms.as_ref().map_or(&[][..], |x| &x[..]);
 
-        frame.render_texture_from_to(
+        let res = frame.render_texture_from_to(
             texture,
             Rectangle::from_size(texture.size().to_f64()),
             clamped_dst,
@@ -405,7 +429,13 @@ impl RenderElement<GlesRenderer> for FramebufferEffectElement {
             1.,
             program.as_ref(),
             uniforms,
-        )
+        );
+
+        if masked {
+            EffectMask::unbind(frame)?;
+        }
+
+        res
     }
 }
 

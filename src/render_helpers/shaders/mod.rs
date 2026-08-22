@@ -119,6 +119,9 @@ impl Shaders {
                     UniformName::new("noise", UniformType::_1f),
                     UniformName::new("saturation", UniformType::_1f),
                     UniformName::new("bg_color", UniformType::_4f),
+                    UniformName::new("niri_mask_tex", UniformType::_1i),
+                    UniformName::new("niri_input_to_mask", UniformType::Matrix3x3),
+                    UniformName::new("niri_mask", UniformType::_1f),
                 ],
             )
             .map_err(|err| {

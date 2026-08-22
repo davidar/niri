@@ -16,6 +16,7 @@ use smithay::utils::{Buffer, Logical, Physical, Point, Rectangle, Scale, Size, T
 use crate::backend::tty::{TtyFrame, TtyRenderer, TtyRendererError};
 use crate::render_helpers::background_effect::RenderParams;
 use crate::render_helpers::effect_buffer::EffectBuffer;
+use crate::render_helpers::effect_mask::{disabled_uniforms, EffectMask};
 use crate::render_helpers::renderer::AsGlesFrame as _;
 use crate::render_helpers::shaders::{mat3_uniform, Shaders};
 use crate::render_helpers::{RenderCtx, RenderTarget};
@@ -73,6 +74,8 @@ pub struct XrayElement {
     src: Rectangle<f64, Buffer>,
     subregion: Option<TransformedRegion>,
     input_to_clip_geo: Mat3,
+    mask: Option<EffectMask>,
+    input_to_mask: Mat3,
     clip_geo_size: Vec2,
     corner_radius: CornerRadius,
     scale: f32,
@@ -112,9 +115,6 @@ impl Xray {
         let (clip_geo, corner_radius) = params
             .clip
             .unwrap_or((params.geometry, CornerRadius::default()));
-
-        let clip_offset = clip_geo.loc - params.geometry.loc;
-        let clip_pos_in_backdrop = pos_in_backdrop + clip_offset.upscale(zoom);
 
         let geo_in_backdrop = Rectangle::new(pos_in_backdrop, params.geometry.size.upscale(zoom));
 
@@ -176,12 +176,26 @@ impl Xray {
                 let src = src.to_buffer(background.scale(), Transform::Normal, &buf_size);
 
                 let buf_size = Vec2::new(buf_size.w as f32, buf_size.h as f32);
-                let pos_against_buf = (clip_pos_in_backdrop - ws_geo.loc).downscale(ws_zoom);
-                let pos_against_buf = Vec2::new(pos_against_buf.x as f32, pos_against_buf.y as f32);
                 let ws_zoom_vec = Vec2::new(ws_zoom.x as f32, ws_zoom.y as f32);
-                let input_to_clip_geo = Mat3::from_scale(ws_zoom_vec / zoom as f32)
-                    * Mat3::from_scale(buf_size / clip_geo_size)
-                    * Mat3::from_translation(-pos_against_buf / buf_size);
+
+                // Maps v_coords into [0, 1] inside a rect given in `params.geometry` space.
+                let input_to_rect = |rect: Rectangle<f64, Logical>| {
+                    let offset = rect.loc - params.geometry.loc;
+                    let pos_in_backdrop = pos_in_backdrop + offset.upscale(zoom);
+                    let pos_against_buf = (pos_in_backdrop - ws_geo.loc).downscale(ws_zoom);
+                    let pos_against_buf =
+                        Vec2::new(pos_against_buf.x as f32, pos_against_buf.y as f32);
+                    let size = Vec2::new(rect.size.w as f32, rect.size.h as f32);
+
+                    Mat3::from_scale(ws_zoom_vec / zoom as f32)
+                        * Mat3::from_scale(buf_size / size)
+                        * Mat3::from_translation(-pos_against_buf / buf_size)
+                };
+
+                let input_to_clip_geo = input_to_rect(clip_geo);
+                let input_to_mask = params.mask.as_ref().map_or(Mat3::IDENTITY, |mask| {
+                    input_to_rect(mask.rect)
+                });
 
                 let mut geometry =
                     Rectangle::new(crop.loc - geo_in_backdrop.loc, crop.size).downscale(zoom);
@@ -194,6 +208,8 @@ impl Xray {
                     src,
                     subregion: params.subregion.clone(),
                     input_to_clip_geo,
+                    mask: params.mask.clone(),
+                    input_to_mask,
                     clip_geo_size,
                     corner_radius,
                     scale: params.scale as f32,
@@ -221,21 +237,28 @@ impl Xray {
             let buf_size = backdrop.logical_size();
             let src = geo_in_backdrop.to_buffer(backdrop.scale(), Transform::Normal, &buf_size);
 
-            let mut clip_geo_in_backdrop = Rectangle::new(clip_offset, clip_geo.size).upscale(zoom);
-            clip_geo_in_backdrop.loc += geo_in_backdrop.loc;
-
-            let clip_pos_in_backdrop = Vec2::new(
-                clip_geo_in_backdrop.loc.x as f32,
-                clip_geo_in_backdrop.loc.y as f32,
-            );
-            let clip_geo_size = Vec2::new(
-                clip_geo_in_backdrop.size.w as f32,
-                clip_geo_in_backdrop.size.h as f32,
-            );
-
             let buf_size = Vec2::new(buf_size.w as f32, buf_size.h as f32);
-            let input_to_clip_geo = Mat3::from_scale(buf_size / clip_geo_size)
-                * Mat3::from_translation(-clip_pos_in_backdrop / buf_size);
+
+            // Maps v_coords into [0, 1] inside a rect given in `params.geometry` space.
+            let input_to_rect = |rect: Rectangle<f64, Logical>| {
+                let offset = rect.loc - params.geometry.loc;
+                let mut in_backdrop = Rectangle::new(offset, rect.size).upscale(zoom);
+                in_backdrop.loc += geo_in_backdrop.loc;
+
+                let pos = Vec2::new(in_backdrop.loc.x as f32, in_backdrop.loc.y as f32);
+                let size = Vec2::new(in_backdrop.size.w as f32, in_backdrop.size.h as f32);
+
+                (
+                    Mat3::from_scale(buf_size / size) * Mat3::from_translation(-pos / buf_size),
+                    size,
+                )
+            };
+
+            let (input_to_clip_geo, clip_geo_size) = input_to_rect(clip_geo);
+            let input_to_mask = params
+                .mask
+                .as_ref()
+                .map_or(Mat3::IDENTITY, |mask| input_to_rect(mask.rect).0);
 
             let elem = XrayElement {
                 buffer: self.backdrop[ctx.target as usize].clone(),
@@ -244,6 +267,8 @@ impl Xray {
                 src,
                 subregion: params.subregion.clone(),
                 input_to_clip_geo,
+                mask: params.mask.clone(),
+                input_to_mask,
                 clip_geo_size,
                 corner_radius: corner_radius.scaled_by(zoom as f32),
                 scale: params.scale as f32,
@@ -259,7 +284,13 @@ impl Xray {
 }
 
 impl XrayElement {
-    fn compute_uniforms(&self) -> [Uniform<'static>; 7] {
+    fn compute_uniforms(&self, masked: bool) -> [Uniform<'static>; 10] {
+        let mask = match &self.mask {
+            Some(mask) if masked => mask.uniforms(self.input_to_mask),
+            _ => disabled_uniforms(),
+        };
+        let [mask_tex, input_to_mask, mask_enabled] = mask;
+
         [
             Uniform::new("niri_scale", self.scale),
             Uniform::new("geo_size", <[f32; 2]>::from(self.clip_geo_size)),
@@ -268,6 +299,9 @@ impl XrayElement {
             Uniform::new("noise", self.noise),
             Uniform::new("saturation", self.saturation),
             Uniform::new("bg_color", self.bg_color.components()),
+            mask_tex,
+            input_to_mask,
+            mask_enabled,
         ]
     }
 }
@@ -339,10 +373,18 @@ impl RenderElement<GlesRenderer> for XrayElement {
             damage
         };
 
-        let uniforms = self.program.is_some().then(|| self.compute_uniforms());
+        let masked = match &self.mask {
+            Some(mask) if self.program.is_some() => mask.bind(frame)?,
+            _ => false,
+        };
+
+        let uniforms = self
+            .program
+            .is_some()
+            .then(|| self.compute_uniforms(masked));
         let uniforms = uniforms.as_ref().map_or(&[][..], |x| &x[..]);
 
-        frame.render_texture_from_to(
+        let res = frame.render_texture_from_to(
             &texture,
             src,
             dst,
@@ -353,7 +395,13 @@ impl RenderElement<GlesRenderer> for XrayElement {
             1.,
             self.program.as_ref(),
             uniforms,
-        )
+        );
+
+        if masked {
+            EffectMask::unbind(frame)?;
+        }
+
+        res
     }
 }
 
