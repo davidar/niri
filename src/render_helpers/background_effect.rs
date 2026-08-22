@@ -312,6 +312,9 @@ pub fn damage_surface(states: &SurfaceData) {
 // Silence, Clippy
 // A Smithay user is talking
 #[allow(clippy::too_many_arguments)]
+/// Renders the background effect for a surface.
+///
+/// Returns `true` when a client-requested effect is being masked by the surface's alpha.
 pub fn render_for_tile(
     ctx: RenderCtx<GlesRenderer>,
     ns: Option<usize>,
@@ -327,7 +330,7 @@ pub fn render_for_tile(
     should_block_out: bool,
     xray_pos: XrayPos,
     push: &mut dyn FnMut(BackgroundEffectElement),
-) {
+) -> bool {
     let context_id = ctx.renderer.context_id();
 
     with_states(surface, |states| {
@@ -341,7 +344,7 @@ pub fn render_for_tile(
         background_effect.update_render_elements(radius, effect, has_blur_region);
 
         if !background_effect.is_visible() {
-            return;
+            return false;
         }
 
         // Where the surface is drawn, in the same coordinate space as the geometry.
@@ -364,7 +367,7 @@ pub fn render_for_tile(
             surface_rect,
             surface_anim_scale,
         ) else {
-            return;
+            return false;
         };
 
         // Blocked-out windows are drawn as solid rectangles, so masking by their real shape would
@@ -379,7 +382,13 @@ pub fn render_for_tile(
         }
         background_effect.update_mask(params.mask.is_some());
 
+        // A client that requested the effect itself and is being masked may still declare
+        // itself opaque over its transparent pixels; the caller keeps the effect beneath such
+        // a surface drawable.
+        let masked = params.mask.is_some() && params.subregion.is_some();
+
         let xray_pos = xray_pos.offset(params.geometry.loc - geometry.loc);
         background_effect.render(ctx, ns, params, xray_pos, push);
-    });
+        masked
+    })
 }

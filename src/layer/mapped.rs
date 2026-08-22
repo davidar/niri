@@ -12,6 +12,7 @@ use crate::animation::Clock;
 use crate::layout::shadow::Shadow;
 use crate::niri_render_elements;
 use crate::render_helpers::background_effect::BackgroundEffectElement;
+use crate::render_helpers::unoccluding_surface::UnoccludingSurfaceRenderElement;
 use crate::render_helpers::renderer::NiriRenderer;
 use crate::render_helpers::shadow::ShadowRenderElement;
 use crate::render_helpers::solid_color::{SolidColorBuffer, SolidColorRenderElement};
@@ -58,6 +59,7 @@ pub struct MappedLayer {
 niri_render_elements! {
     LayerSurfaceRenderElement<R> => {
         Wayland = WaylandSurfaceRenderElement<R>,
+        Unoccluding = UnoccludingSurfaceRenderElement<R>,
         SolidColor = SolidColorRenderElement,
         Shadow = ShadowRenderElement,
         BackgroundEffect = BackgroundEffectElement,
@@ -214,10 +216,15 @@ impl MappedLayer {
                 Kind::Unspecified,
             );
             push(elem.into());
-        } else {
-            // Layer surfaces don't have extra geometry like windows.
-            let buf_pos = location;
+        }
 
+        // Layer surfaces don't have extra geometry like windows.
+        let buf_pos = location;
+
+        // Surface elements go above the effect, but whether they may occlude it is only known
+        // once the effect has been rendered, so collect both and push afterwards.
+        let mut surface_elems = Vec::new();
+        if !should_block_out {
             push_elements_from_surface_tree(
                 ctx.renderer,
                 surface,
@@ -225,19 +232,18 @@ impl MappedLayer {
                 scale,
                 alpha,
                 Kind::ScanoutCandidate,
-                &mut |elem| push(elem.into()),
+                &mut |elem| surface_elems.push(elem),
             );
         }
 
         let location = location.to_physical_precise_round(scale).to_logical(scale);
-        self.shadow
-            .render(ctx.renderer, location, &mut |elem| push(elem.into()));
 
         let geometry = Rectangle::new(location, self.block_out_buffer.size());
         let surface_off = Point::new(0., 0.); // No geometry on layer surfaces.
         let surface_anim_scale = Scale::from(1.);
         let radius = self.rules.geometry_corner_radius.unwrap_or_default();
-        background_effect::render_for_tile(
+        let mut effect_elems = Vec::new();
+        let masked = background_effect::render_for_tile(
             ctx.as_gles(),
             ns,
             geometry,
@@ -251,8 +257,23 @@ impl MappedLayer {
             self.rules.background_effect,
             should_block_out,
             xray_pos,
-            &mut |elem| push(elem.into()),
+            &mut |elem| effect_elems.push(elem),
         );
+
+        for elem in surface_elems {
+            if masked {
+                push(UnoccludingSurfaceRenderElement::new(elem).into());
+            } else {
+                push(elem.into());
+            }
+        }
+
+        self.shadow
+            .render(ctx.renderer, location, &mut |elem| push(elem.into()));
+
+        for elem in effect_elems {
+            push(elem.into());
+        }
     }
 
     pub fn render_popups<R: NiriRenderer>(
