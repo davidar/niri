@@ -84,8 +84,15 @@ impl SpatialMovementGrab {
             GestureState::Recognizing => {
                 let c = self.new_location - self.start_data.location;
 
-                // Check if the gesture moved far enough to decide. Threshold copied from GTK 4.
-                if c.x * c.x + c.y * c.y >= 8. * 8. {
+                // Check if the gesture moved far enough to decide.
+                let lock_distance = data
+                    .niri
+                    .config
+                    .borrow()
+                    .gestures
+                    .pointer_drag
+                    .direction_lock_distance;
+                if c.x * c.x + c.y * c.y >= lock_distance * lock_distance {
                     if c.x.abs() > c.y.abs() {
                         self.gesture = GestureState::ViewOffset;
                         if let Some((ws_idx, ws)) = layout.find_workspace_by_id(self.workspace_id) {

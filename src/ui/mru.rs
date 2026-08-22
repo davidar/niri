@@ -60,7 +60,6 @@ const TITLE_GAP: f64 = 14.;
 const GAP: f64 = 16.;
 
 /// How much of the next window will always peek from the side of the screen.
-const STRUT: f64 = 192.;
 
 /// Padding in the scope indication panel.
 const PANEL_PADDING: i32 = 12;
@@ -1303,7 +1302,8 @@ impl Inner {
 
         let output_size = output_size(&self.output);
 
-        let working_x = STRUT + GAP;
+        let strut = self.config.borrow().recent_windows.edge_peek;
+        let working_x = strut + GAP;
         let working_width = (output_size.w - working_x * 2.).max(0.);
 
         let mut current_geo = Rectangle::default();

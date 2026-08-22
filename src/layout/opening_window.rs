@@ -22,6 +22,7 @@ pub struct OpenAnimation {
     anim: Animation,
     random_seed: f32,
     buffer: OffscreenBuffer,
+    scale_from: f64,
 }
 
 niri_render_elements! {
@@ -32,11 +33,12 @@ niri_render_elements! {
 }
 
 impl OpenAnimation {
-    pub fn new(anim: Animation) -> Self {
+    pub fn new(anim: Animation, scale_from: f64) -> Self {
         Self {
             anim,
             random_seed: fastrand::f32(),
             buffer: OffscreenBuffer::default(),
+            scale_from,
         }
     }
 
@@ -128,7 +130,7 @@ impl OpenAnimation {
         let elem = RescaleRenderElement::from_element(
             elem,
             center.to_physical_precise_round(scale),
-            (progress / 2. + 0.5).max(0.),
+            (self.scale_from + progress * (1. - self.scale_from)).max(0.),
         );
 
         let elem = RelocateRenderElement::from_element(

@@ -14,6 +14,8 @@ pub struct RecentWindows {
     pub highlight: MruHighlight,
     pub previews: MruPreviews,
     pub binds: Vec<Bind>,
+    /// How much of the neighbouring previews peeks in from the screen edges (logical px).
+    pub edge_peek: f64,
 }
 
 impl Default for RecentWindows {
@@ -25,6 +27,7 @@ impl Default for RecentWindows {
             highlight: MruHighlight::default(),
             previews: MruPreviews::default(),
             binds: default_binds(),
+            edge_peek: 192.,
         }
     }
 }
@@ -45,6 +48,8 @@ pub struct RecentWindowsPart {
     pub previews: Option<MruPreviewsPart>,
     #[knuffel(child)]
     pub binds: Option<MruBinds>,
+    #[knuffel(child, unwrap(argument))]
+    pub edge_peek: Option<FloatOrInt<0, 65535>>,
 }
 
 impl MergeWith<RecentWindowsPart> for RecentWindows {
@@ -55,7 +60,7 @@ impl MergeWith<RecentWindowsPart> for RecentWindows {
         }
 
         merge_clone!((self, part), debounce_ms, open_delay_ms);
-        merge!((self, part), highlight, previews);
+        merge!((self, part), highlight, previews, edge_peek);
 
         if let Some(part) = &part.binds {
             // Remove existing binds matching any new bind.

@@ -1,3 +1,4 @@
+use std::time::Duration;
 use std::cell::Cell;
 
 use calloop::Interest;
@@ -37,7 +38,7 @@ use tracing::field::Empty;
 
 use crate::input::move_grab::MoveGrab;
 use crate::input::resize_grab::ResizeGrab;
-use crate::input::{AnyStartData, DOUBLE_CLICK_TIME};
+use crate::input::AnyStartData;
 use crate::layout::ActivateWindow;
 use crate::niri::{CastTarget, PopupGrabState, State};
 use crate::utils::transaction::Transaction;
@@ -260,7 +261,10 @@ impl XdgShellHandler for State {
         }
 
         if let Some((last_time, last_edges)) = last {
-            if time.saturating_sub(last_time) <= DOUBLE_CLICK_TIME {
+            let double_click_time = Duration::from_millis(u64::from(
+                self.niri.config.borrow().input.double_click_time_ms,
+            ));
+            if time.saturating_sub(last_time) <= double_click_time {
                 // Allow quick resize after a triple click.
                 last_cell.set(None);
 

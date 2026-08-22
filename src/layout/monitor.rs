@@ -33,18 +33,6 @@ use crate::utils::{
     output_size, round_logical_in_physical, round_logical_in_physical_max1, ResizeEdge,
 };
 
-/// Amount of touchpad movement to scroll the height of one workspace.
-const WORKSPACE_GESTURE_MOVEMENT: f64 = 300.;
-
-const WORKSPACE_GESTURE_RUBBER_BAND: RubberBand = RubberBand {
-    stiffness: 0.5,
-    limit: 0.05,
-};
-
-/// Amount of DnD edge scrolling to scroll the height of one workspace.
-///
-/// This constant is tied to the default dnd-edge-workspace-switch max-speed setting.
-const WORKSPACE_DND_EDGE_SCROLL_MOVEMENT: f64 = 1500.;
 
 #[derive(Debug)]
 pub struct Monitor<W: LayoutElement> {
@@ -1852,7 +1840,7 @@ impl<W: LayoutElement> Monitor<W> {
             start_idx: current_idx,
             current_idx,
             animation: None,
-            tracker: SwipeTracker::new(),
+            tracker: SwipeTracker::new(&self.options.gestures.touchpad_swipe),
             is_touchpad,
             is_clamped: !self.overview_open,
             dnd_last_event_time: None,
@@ -1884,7 +1872,7 @@ impl<W: LayoutElement> Monitor<W> {
             start_idx: current_idx,
             current_idx,
             animation: None,
-            tracker: SwipeTracker::new(),
+            tracker: SwipeTracker::new(&self.options.gestures.touchpad_swipe),
             is_touchpad: false,
             is_clamped: false,
             dnd_last_event_time: Some(self.clock.now_unadjusted()),
@@ -1909,7 +1897,7 @@ impl<W: LayoutElement> Monitor<W> {
 
         let zoom = self.overview_zoom();
         let total_height = if gesture.is_touchpad {
-            WORKSPACE_GESTURE_MOVEMENT
+            self.options.gestures.touchpad_swipe.workspace_movement
         } else {
             self.workspace_size_with_gap(1.).h
         };
@@ -1926,7 +1914,7 @@ impl<W: LayoutElement> Monitor<W> {
         };
 
         let delta_y = delta_y / delta_scale;
-        let mut rubber_band = WORKSPACE_GESTURE_RUBBER_BAND;
+        let mut rubber_band = RubberBand::from(self.options.gestures.touchpad_swipe.workspace_rubber_band);
         rubber_band.limit /= zoom;
 
         gesture.tracker.push(delta_y, timestamp);
@@ -2016,7 +2004,7 @@ impl<W: LayoutElement> Monitor<W> {
 
         gesture.tracker.push(delta, now);
 
-        let total_height = WORKSPACE_DND_EDGE_SCROLL_MOVEMENT;
+        let total_height = self.options.gestures.dnd_edge_workspace_switch.workspace_movement;
         let pos = gesture.tracker.pos() / total_height;
         let unclamped = gesture.start_idx + pos;
 
@@ -2041,9 +2029,9 @@ impl<W: LayoutElement> Monitor<W> {
 
         let zoom = self.overview_zoom();
         let total_height = if gesture.dnd_last_event_time.is_some() {
-            WORKSPACE_DND_EDGE_SCROLL_MOVEMENT
+            self.options.gestures.dnd_edge_workspace_switch.workspace_movement
         } else if gesture.is_touchpad {
-            WORKSPACE_GESTURE_MOVEMENT
+            self.options.gestures.touchpad_swipe.workspace_movement
         } else {
             self.workspace_size_with_gap(1.).h
         };
@@ -2056,7 +2044,7 @@ impl<W: LayoutElement> Monitor<W> {
         let now = self.clock.now_unadjusted();
         gesture.tracker.push(0., now);
 
-        let mut rubber_band = WORKSPACE_GESTURE_RUBBER_BAND;
+        let mut rubber_band = RubberBand::from(self.options.gestures.touchpad_swipe.workspace_rubber_band);
         rubber_band.limit /= zoom;
 
         let mut velocity = gesture.tracker.velocity() / total_height;

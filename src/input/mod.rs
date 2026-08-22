@@ -69,7 +69,6 @@ pub mod touch_overview_grab;
 
 use backend_ext::{NiriInputBackend as InputBackend, NiriInputDevice as _};
 
-pub const DOUBLE_CLICK_TIME: Duration = Duration::from_millis(400);
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TabletData {
@@ -2979,7 +2978,10 @@ impl State {
                         }
 
                         if let Some((last_time, last_edges)) = last {
-                            if time.saturating_sub(last_time) <= DOUBLE_CLICK_TIME {
+                            let double_click_time = Duration::from_millis(u64::from(
+                                self.niri.config.borrow().input.double_click_time_ms,
+                            ));
+                            if time.saturating_sub(last_time) <= double_click_time {
                                 // Allow quick resize after a triple click.
                                 last_cell.set(None);
 
@@ -3101,6 +3103,9 @@ impl State {
     }
 
     fn on_pointer_axis<I: InputBackend>(&mut self, event: I::PointerAxisEvent) {
+        let overview_scroll_cooldown = Duration::from_millis(u64::from(
+            self.niri.config.borrow().overview.scroll_cooldown_ms,
+        ));
         let pointer = &self.niri.seat.get_pointer().unwrap();
 
         let source = event.source();
@@ -3233,7 +3238,7 @@ impl State {
                             },
                             action: Action::FocusWorkspaceUpUnderMouse,
                             repeat: true,
-                            cooldown: Some(Duration::from_millis(50)),
+                            cooldown: Some(overview_scroll_cooldown),
                             allow_when_locked: false,
                             allow_inhibiting: false,
                             hotkey_overlay_title: None,
@@ -3245,7 +3250,7 @@ impl State {
                             },
                             action: Action::FocusWorkspaceDownUnderMouse,
                             repeat: true,
-                            cooldown: Some(Duration::from_millis(50)),
+                            cooldown: Some(overview_scroll_cooldown),
                             allow_when_locked: false,
                             allow_inhibiting: false,
                             hotkey_overlay_title: None,
@@ -3259,7 +3264,7 @@ impl State {
                             },
                             action: Action::FocusColumnLeftUnderMouse,
                             repeat: true,
-                            cooldown: Some(Duration::from_millis(50)),
+                            cooldown: Some(overview_scroll_cooldown),
                             allow_when_locked: false,
                             allow_inhibiting: false,
                             hotkey_overlay_title: None,
@@ -3271,7 +3276,7 @@ impl State {
                             },
                             action: Action::FocusColumnRightUnderMouse,
                             repeat: true,
-                            cooldown: Some(Duration::from_millis(50)),
+                            cooldown: Some(overview_scroll_cooldown),
                             allow_when_locked: false,
                             allow_inhibiting: false,
                             hotkey_overlay_title: None,
@@ -3935,12 +3940,17 @@ impl State {
             return;
         }
 
-        if event.fingers() == 3 {
+        let (workspace_fingers, overview_fingers) = {
+            let config = self.niri.config.borrow();
+            let swipe = &config.gestures.touchpad_swipe;
+            (swipe.workspace_fingers, swipe.overview_fingers)
+        };
+        if event.fingers() == workspace_fingers {
             self.niri.gesture_swipe_3f_cumulative = Some((0., 0.));
 
             // We handled this event.
             return;
-        } else if event.fingers() == 4 {
+        } else if event.fingers() == overview_fingers {
             self.niri.layout.overview_gesture_begin();
             self.niri.queue_redraw_all();
 

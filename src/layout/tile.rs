@@ -13,7 +13,7 @@ use super::opening_window::{OpenAnimation, OpeningWindowRenderElement};
 use super::shadow::Shadow;
 use super::{
     HitType, LayoutElement, LayoutElementRenderElement, LayoutElementRenderSnapshot, Options,
-    SizeFrac, RESIZE_ANIMATION_THRESHOLD,
+    SizeFrac,
 };
 use crate::animation::{Animation, Clock};
 use crate::layout::SizingMode;
@@ -354,7 +354,7 @@ impl<W: LayoutElement> Tile<W> {
             let tile_change = self.tile_size().to_f64().to_point() - tile_size_from.to_point();
             let tile_change = f64::max(tile_change.x.abs(), tile_change.y.abs());
             let change = f64::max(change, tile_change);
-            if change > RESIZE_ANIMATION_THRESHOLD {
+            if change > self.options.layout.resize_animation_threshold {
                 let anim = Animation::new(
                     self.clock.clone(),
                     0.,
@@ -579,7 +579,9 @@ impl<W: LayoutElement> Tile<W> {
             1.,
             0.,
             self.options.animations.window_open.anim,
-        )));
+        ),
+            self.options.animations.window_open.scale_from,
+        ));
     }
 
     pub fn resize_animation(&self) -> Option<&Animation> {

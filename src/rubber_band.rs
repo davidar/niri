@@ -4,6 +4,15 @@ pub struct RubberBand {
     pub limit: f64,
 }
 
+impl From<niri_config::RubberBandParams> for RubberBand {
+    fn from(params: niri_config::RubberBandParams) -> Self {
+        Self {
+            stiffness: params.stiffness,
+            limit: params.limit,
+        }
+    }
+}
+
 impl RubberBand {
     pub fn band(&self, x: f64) -> f64 {
         let c = self.stiffness;

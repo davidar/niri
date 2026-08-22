@@ -90,22 +90,6 @@ pub mod workspace;
 #[cfg(test)]
 mod tests;
 
-/// Size changes up to this many pixels don't animate.
-pub const RESIZE_ANIMATION_THRESHOLD: f64 = 10.;
-
-/// Pointer needs to move this far to pull a window from the layout.
-const INTERACTIVE_MOVE_START_THRESHOLD: f64 = 256. * 256.;
-
-/// Opacity of interactively moved tiles targeting the scrolling layout.
-const INTERACTIVE_MOVE_ALPHA: f64 = 0.75;
-
-/// Amount of touchpad movement to toggle the overview.
-const OVERVIEW_GESTURE_MOVEMENT: f64 = 300.;
-
-const OVERVIEW_GESTURE_RUBBER_BAND: RubberBand = RubberBand {
-    stiffness: 0.5,
-    limit: 0.05,
-};
 
 /// Size-relative units.
 pub struct SizeFrac;
@@ -3173,7 +3157,7 @@ impl<W: LayoutElement> Layout<W> {
 
                     // Animate the tile back to opaque.
                     move_.tile.animate_alpha(
-                        INTERACTIVE_MOVE_ALPHA,
+                        self.options.layout.interactive_move_opacity,
                         1.,
                         self.options.animations.window_movement.0,
                     );
@@ -3186,7 +3170,7 @@ impl<W: LayoutElement> Layout<W> {
                     // Animate the tile back to semitransparent.
                     move_.tile.animate_alpha(
                         1.,
-                        INTERACTIVE_MOVE_ALPHA,
+                        self.options.layout.interactive_move_opacity,
                         self.options.animations.window_movement.0,
                     );
                     move_.tile.hold_alpha_animation_after_done();
@@ -3744,7 +3728,7 @@ impl<W: LayoutElement> Layout<W> {
 
         let value = self.overview_progress.take().map_or(0., |p| p.value());
         let gesture = OverviewGesture {
-            tracker: SwipeTracker::new(),
+            tracker: SwipeTracker::new(&self.options.gestures.touchpad_swipe),
             start: value,
             value,
         };
@@ -3760,10 +3744,11 @@ impl<W: LayoutElement> Layout<W> {
 
         gesture.tracker.push(delta_y, timestamp);
 
-        let total_height = OVERVIEW_GESTURE_MOVEMENT;
+        let total_height = self.options.gestures.touchpad_swipe.overview_movement;
         let pos = gesture.tracker.pos() / total_height;
         let new_value = gesture.start + pos;
-        let new_value = OVERVIEW_GESTURE_RUBBER_BAND.clamp(0., 1., new_value);
+        let rubber_band = RubberBand::from(self.options.gestures.touchpad_swipe.overview_rubber_band);
+        let new_value = rubber_band.clamp(0., 1., new_value);
 
         if gesture.value == new_value {
             return Some(false);
@@ -3784,7 +3769,7 @@ impl<W: LayoutElement> Layout<W> {
         let now = self.clock.now_unadjusted();
         gesture.tracker.push(0., now);
 
-        let total_height = OVERVIEW_GESTURE_MOVEMENT;
+        let total_height = self.options.gestures.touchpad_swipe.overview_movement;
 
         let mut velocity = gesture.tracker.velocity() / total_height;
         let current_pos = gesture.tracker.pos() / total_height;
@@ -3794,7 +3779,8 @@ impl<W: LayoutElement> Layout<W> {
         let new_value = new_value.clamp(0., 1.).round();
 
         velocity *=
-            OVERVIEW_GESTURE_RUBBER_BAND.clamp_derivative(0., 1., gesture.start + current_pos);
+            RubberBand::from(self.options.gestures.touchpad_swipe.overview_rubber_band)
+                .clamp_derivative(0., 1., gesture.start + current_pos);
 
         self.overview_open = new_value == 1.;
         self.overview_progress = Some(OverviewProgress::Animation(Animation::new(
@@ -3905,11 +3891,9 @@ impl<W: LayoutElement> Layout<W> {
                 let (cx, cy) = (pointer_delta.x, pointer_delta.y);
                 let sq_dist = cx * cx + cy * cy;
 
-                let factor = RubberBand {
-                    stiffness: 1.0,
-                    limit: 0.5,
-                }
-                .band(sq_dist / INTERACTIVE_MOVE_START_THRESHOLD);
+                let start_threshold = self.options.layout.interactive_move_threshold.powi(2);
+                let factor = RubberBand::from(self.options.layout.interactive_move_rubber_band)
+                    .band(sq_dist / start_threshold);
 
                 let (is_floating, tile, workspace_config) = self
                     .workspaces_mut()
@@ -3934,7 +3918,7 @@ impl<W: LayoutElement> Layout<W> {
                     pointer_ratio_within_window,
                 });
 
-                if !is_floating && sq_dist < INTERACTIVE_MOVE_START_THRESHOLD {
+                if !is_floating && sq_dist < start_threshold {
                     return true;
                 }
 
@@ -4013,7 +3997,7 @@ impl<W: LayoutElement> Layout<W> {
                     // Animate to semitransparent.
                     tile.animate_alpha(
                         1.,
-                        INTERACTIVE_MOVE_ALPHA,
+                        self.options.layout.interactive_move_opacity,
                         self.options.animations.window_movement.0,
                     );
                     tile.hold_alpha_animation_after_done();
@@ -4164,7 +4148,7 @@ impl<W: LayoutElement> Layout<W> {
 
             // Also animate the tile back to opaque.
             move_.tile.animate_alpha(
-                INTERACTIVE_MOVE_ALPHA,
+                self.options.layout.interactive_move_opacity,
                 1.,
                 self.options.animations.window_movement.0,
             );

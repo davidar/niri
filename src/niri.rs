@@ -129,7 +129,7 @@ use crate::dbus::gnome_shell_introspect::{self, IntrospectToNiri, NiriToIntrospe
 #[cfg(feature = "dbus")]
 use crate::dbus::gnome_shell_screenshot::{NiriToScreenshot, ScreenshotToNiri};
 use crate::frame_clock::FrameClock;
-use crate::handlers::{configure_lock_surface, XDG_ACTIVATION_TOKEN_TIMEOUT};
+use crate::handlers::{configure_lock_surface, xdg_activation_token_timeout};
 use crate::input::pick_color_grab::PickColorGrab;
 use crate::input::scroll_swipe_gesture::ScrollSwipeGesture;
 use crate::input::scroll_tracker::ScrollTracker;
@@ -2384,12 +2384,14 @@ impl Niri {
         let activation_state = XdgActivationState::new::<State>(&display_handle);
         event_loop
             .insert_source(
-                Timer::from_duration(XDG_ACTIVATION_TOKEN_TIMEOUT),
+                Timer::from_duration(xdg_activation_token_timeout(&config.borrow())),
                 |_, _, state| {
-                    state.niri.activation_state.retain_tokens(|_, token_data| {
-                        token_data.timestamp.elapsed() < XDG_ACTIVATION_TOKEN_TIMEOUT
-                    });
-                    TimeoutAction::ToDuration(XDG_ACTIVATION_TOKEN_TIMEOUT)
+                    let timeout = xdg_activation_token_timeout(&state.niri.config.borrow());
+                    state
+                        .niri
+                        .activation_state
+                        .retain_tokens(|_, token_data| token_data.timestamp.elapsed() < timeout);
+                    TimeoutAction::ToDuration(timeout)
                 },
             )
             .unwrap();
@@ -3106,17 +3108,18 @@ impl Niri {
         let geom = self.global_space.output_geometry(output).unwrap();
         let size = geom.size.to_f64();
 
+        let trigger = hot_corners.trigger_size.map_or(1., |s| s.0);
         let contains = move |corner: Point<f64, Logical>| {
-            Rectangle::new(corner, Size::new(1., 1.)).contains(pos)
+            Rectangle::new(corner, Size::new(trigger, trigger)).contains(pos)
         };
 
-        if hot_corners.top_right && contains(Point::new(size.w - 1., 0.)) {
+        if hot_corners.top_right && contains(Point::new(size.w - trigger, 0.)) {
             return true;
         }
-        if hot_corners.bottom_left && contains(Point::new(0., size.h - 1.)) {
+        if hot_corners.bottom_left && contains(Point::new(0., size.h - trigger)) {
             return true;
         }
-        if hot_corners.bottom_right && contains(Point::new(size.w - 1., size.h - 1.)) {
+        if hot_corners.bottom_right && contains(Point::new(size.w - trigger, size.h - trigger)) {
             return true;
         }
 
@@ -5906,7 +5909,9 @@ impl Niri {
             // let's wait for the lock surfaces.
             //
             // Give them a second; swaylock can take its time to paint a big enough image.
-            let timer = Timer::from_duration(Duration::from_millis(1000));
+            let timer = Timer::from_duration(Duration::from_millis(u64::from(
+                self.config.borrow().timeouts.lock_surface_ms,
+            )));
             let deadline_token = self
                 .event_loop
                 .insert_source(timer, |_, _, state| {

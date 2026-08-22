@@ -1,13 +1,14 @@
 use std::collections::VecDeque;
 use std::time::Duration;
 
-const HISTORY_LIMIT: Duration = Duration::from_millis(150);
-const DECELERATION_TOUCHPAD: f64 = 0.997;
-
 #[derive(Debug)]
 pub struct SwipeTracker {
     history: VecDeque<Event>,
     pos: f64,
+    /// Per-millisecond velocity retention for the fling projection.
+    deceleration: f64,
+    /// How much recent history feeds the velocity estimate.
+    history_limit: Duration,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -17,11 +18,12 @@ struct Event {
 }
 
 impl SwipeTracker {
-    #[allow(clippy::new_without_default)]
-    pub fn new() -> Self {
+    pub fn new(config: &niri_config::TouchpadSwipe) -> Self {
         Self {
             history: VecDeque::new(),
             pos: 0.,
+            deceleration: config.deceleration,
+            history_limit: Duration::from_millis(u64::from(config.velocity_window_ms)),
         }
     }
 
@@ -68,7 +70,11 @@ impl SwipeTracker {
     /// Computes the gesture end position after decelerating to a halt.
     pub fn projected_end_pos(&self) -> f64 {
         let vel = self.velocity();
-        self.pos - vel / (1000. * DECELERATION_TOUCHPAD.ln())
+        if !(0. < self.deceleration && self.deceleration < 1.) {
+            // No usable deceleration curve: stop where the fingers are.
+            return self.pos;
+        }
+        self.pos - vel / (1000. * self.deceleration.ln())
     }
 
     fn trim_history(&mut self) {
@@ -77,7 +83,7 @@ impl SwipeTracker {
         };
 
         while let Some(first) = self.history.front() {
-            if timestamp <= first.timestamp + HISTORY_LIMIT {
+            if timestamp <= first.timestamp + self.history_limit {
                 break;
             }
 

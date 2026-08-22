@@ -28,9 +28,6 @@ use crate::utils::transaction::{Transaction, TransactionBlocker};
 use crate::utils::ResizeEdge;
 use crate::window::ResolvedWindowRules;
 
-/// Amount of touchpad movement to scroll the view for the width of one working area.
-const VIEW_GESTURE_WORKING_AREA_MOVEMENT: f64 = 1200.;
-
 /// A scrollable-tiling space for windows.
 #[derive(Debug)]
 pub struct ScrollingSpace<W: LayoutElement> {
@@ -1560,7 +1557,14 @@ impl<W: LayoutElement> ScrollingSpace<W> {
 
         let scale = Scale::from(self.scale);
         let res = ClosingWindow::new(
-            renderer, snapshot, scale, tile_size, tile_pos, blocker, anim,
+            renderer,
+            snapshot,
+            scale,
+            tile_size,
+            tile_pos,
+            blocker,
+            anim,
+            self.options.animations.window_close.scale_to,
         );
         match res {
             Ok(closing) => {
@@ -3063,7 +3067,7 @@ impl<W: LayoutElement> ScrollingSpace<W> {
         let gesture = ViewGesture {
             current_view_offset: self.view_offset.current(),
             animation: None,
-            tracker: SwipeTracker::new(),
+            tracker: SwipeTracker::new(&self.options.gestures.touchpad_swipe),
             delta_from_tracker: self.view_offset.current(),
             stationary_view_offset: self.view_offset.stationary(),
             is_touchpad,
@@ -3086,7 +3090,7 @@ impl<W: LayoutElement> ScrollingSpace<W> {
         let gesture = ViewGesture {
             current_view_offset: self.view_offset.current(),
             animation: None,
-            tracker: SwipeTracker::new(),
+            tracker: SwipeTracker::new(&self.options.gestures.touchpad_swipe),
             delta_from_tracker: self.view_offset.current(),
             stationary_view_offset: self.view_offset.stationary(),
             is_touchpad: false,
@@ -3115,7 +3119,7 @@ impl<W: LayoutElement> ScrollingSpace<W> {
         gesture.tracker.push(delta_x, timestamp);
 
         let norm_factor = if gesture.is_touchpad {
-            self.working_area.size.w / VIEW_GESTURE_WORKING_AREA_MOVEMENT
+            self.working_area.size.w / self.options.gestures.touchpad_swipe.view_movement
         } else {
             1.
         };
@@ -3219,7 +3223,7 @@ impl<W: LayoutElement> ScrollingSpace<W> {
         gesture.tracker.push(0., now);
 
         let norm_factor = if gesture.is_touchpad {
-            self.working_area.size.w / VIEW_GESTURE_WORKING_AREA_MOVEMENT
+            self.working_area.size.w / self.options.gestures.touchpad_swipe.view_movement
         } else {
             1.
         };

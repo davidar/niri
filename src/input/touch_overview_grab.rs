@@ -19,7 +19,6 @@ use crate::utils::get_monotonic_time;
 use crate::window::Mapped;
 
 // When the touch is stationary for this much time, it becomes an interactive move.
-const INTERACTIVE_MOVE_THRESHOLD: Duration = Duration::from_millis(500);
 
 pub struct TouchOverviewGrab {
     start_data: AnyStartData<State>,
@@ -83,7 +82,10 @@ impl TouchOverviewGrab {
         if matches!(self.gesture, GestureState::Recognizing) {
             if let Some(window) = self.window.as_ref().filter(|win| win.alive()) {
                 let passed = timestamp.saturating_sub(self.start_timestamp);
-                if INTERACTIVE_MOVE_THRESHOLD <= passed
+                let long_press = Duration::from_millis(u64::from(
+                    data.niri.config.borrow().gestures.touch.long_press_ms,
+                ));
+                if long_press <= passed
                     && layout.interactive_move_begin(
                         window.clone(),
                         &self.output,

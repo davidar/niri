@@ -18,7 +18,7 @@ use smithay::wayland::shell::xdg::ToplevelCachedState;
 use smithay::wayland::shm::{ShmHandler, ShmState};
 
 use super::xdg_shell::add_mapped_toplevel_pre_commit_hook;
-use crate::handlers::XDG_ACTIVATION_TOKEN_TIMEOUT;
+use crate::handlers::xdg_activation_token_timeout;
 use crate::layout::{ActivateWindow, AddWindowTarget, LayoutElement as _};
 use crate::niri::{CastTarget, ClientState, LockState, State};
 use crate::utils::transaction::Transaction;
@@ -160,9 +160,10 @@ impl CompositorHandler for State {
                     let activate = activate.unwrap_or_else(|| {
                         // Check the token timestamp again in case the window took a while between
                         // requesting activation and mapping.
-                        let token = activation_token_data.filter(|token| {
-                            token.timestamp.elapsed() < XDG_ACTIVATION_TOKEN_TIMEOUT
-                        });
+                        let token_timeout =
+                            xdg_activation_token_timeout(&self.niri.config.borrow());
+                        let token = activation_token_data
+                            .filter(|token| token.timestamp.elapsed() < token_timeout);
                         if token.is_some() {
                             ActivateWindow::Yes
                         } else {

@@ -123,6 +123,8 @@ pub struct Overview {
     pub zoom: f64,
     pub backdrop_color: Color,
     pub workspace_shadow: WorkspaceShadow,
+    /// Cooldown (ms) between repeated wheel-scroll workspace/column switches in the overview.
+    pub scroll_cooldown_ms: u16,
 }
 
 impl Default for Overview {
@@ -131,6 +133,7 @@ impl Default for Overview {
             zoom: 0.5,
             backdrop_color: DEFAULT_BACKDROP_COLOR,
             workspace_shadow: WorkspaceShadow::default(),
+            scroll_cooldown_ms: 50,
         }
     }
 }
@@ -143,12 +146,46 @@ pub struct OverviewPart {
     pub backdrop_color: Option<Color>,
     #[knuffel(child)]
     pub workspace_shadow: Option<WorkspaceShadowPart>,
+    #[knuffel(child, unwrap(argument))]
+    pub scroll_cooldown_ms: Option<u16>,
 }
 
 impl MergeWith<OverviewPart> for Overview {
     fn merge_with(&mut self, part: &OverviewPart) {
         merge!((self, part), zoom, workspace_shadow);
-        merge_clone!((self, part), backdrop_color);
+        merge_clone!((self, part), backdrop_color, scroll_cooldown_ms);
+    }
+}
+
+/// Internal timeouts.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Timeouts {
+    /// How long an xdg-activation token stays valid.
+    pub xdg_activation_token_ms: u32,
+    /// How long to wait for lock surfaces to paint before locking anyway.
+    pub lock_surface_ms: u32,
+}
+
+impl Default for Timeouts {
+    fn default() -> Self {
+        Self {
+            xdg_activation_token_ms: 10_000,
+            lock_surface_ms: 1000,
+        }
+    }
+}
+
+#[derive(knuffel::Decode, Debug, Clone, Copy, PartialEq)]
+pub struct TimeoutsPart {
+    #[knuffel(child, unwrap(argument))]
+    pub xdg_activation_token_ms: Option<u32>,
+    #[knuffel(child, unwrap(argument))]
+    pub lock_surface_ms: Option<u32>,
+}
+
+impl MergeWith<TimeoutsPart> for Timeouts {
+    fn merge_with(&mut self, part: &TimeoutsPart) {
+        merge_clone!((self, part), xdg_activation_token_ms, lock_surface_ms);
     }
 }
 

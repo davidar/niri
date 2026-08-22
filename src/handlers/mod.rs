@@ -84,7 +84,10 @@ use crate::protocols::virtual_pointer::{
 };
 use crate::utils::{output_size, send_scale_transform};
 
-pub const XDG_ACTIVATION_TOKEN_TIMEOUT: Duration = Duration::from_secs(10);
+/// How long an xdg-activation token stays valid.
+pub fn xdg_activation_token_timeout(config: &niri_config::Config) -> Duration {
+    Duration::from_millis(u64::from(config.timeouts.xdg_activation_token_ms))
+}
 
 impl SeatHandler for State {
     type KeyboardFocus = WlSurface;
@@ -812,7 +815,8 @@ impl XdgActivationHandler for State {
         token_data: XdgActivationTokenData,
         surface: WlSurface,
     ) {
-        if token_data.timestamp.elapsed() < XDG_ACTIVATION_TOKEN_TIMEOUT {
+        let token_timeout = xdg_activation_token_timeout(&self.niri.config.borrow());
+        if token_data.timestamp.elapsed() < token_timeout {
             if let Some((mapped, _)) = self.niri.layout.find_window_and_output_mut(&surface) {
                 let window = mapped.window.clone();
                 match mapped.rules().on_xdg_activate {

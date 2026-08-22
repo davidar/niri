@@ -22,7 +22,6 @@ use smithay::output::{Output, WeakOutput};
 use smithay::utils::{Buffer, Physical, Point, Rectangle, Scale, Size, Transform};
 
 use crate::animation::{Animation, Clock};
-use crate::layout::floating::DIRECTIONAL_MOVE_PX;
 use crate::niri_render_elements;
 use crate::render_helpers::primary_gpu_texture::PrimaryGpuTextureRenderElement;
 use crate::render_helpers::solid_color::{SolidColorBuffer, SolidColorRenderElement};
@@ -315,6 +314,7 @@ impl ScreenshotUi {
         let Self::Open {
             selection: (output, a, b),
             output_data,
+            config,
             ..
         } = self
         else {
@@ -323,7 +323,8 @@ impl ScreenshotUi {
 
         let data = &output_data[output];
 
-        let delta: i32 = to_physical_precise_round(data.scale, DIRECTIONAL_MOVE_PX);
+        let step = config.borrow().layout.floating_move_step;
+        let delta: i32 = to_physical_precise_round(data.scale, step);
         let delta = min(delta, min(a.x, b.x));
         a.x -= delta;
         b.x -= delta;
@@ -335,6 +336,7 @@ impl ScreenshotUi {
         let Self::Open {
             selection: (output, a, b),
             output_data,
+            config,
             ..
         } = self
         else {
@@ -343,7 +345,8 @@ impl ScreenshotUi {
 
         let data = &output_data[output];
 
-        let delta: i32 = to_physical_precise_round(data.scale, DIRECTIONAL_MOVE_PX);
+        let step = config.borrow().layout.floating_move_step;
+        let delta: i32 = to_physical_precise_round(data.scale, step);
         let delta = min(delta, data.size.w - max(a.x, b.x) - 1);
         a.x += delta;
         b.x += delta;
@@ -355,6 +358,7 @@ impl ScreenshotUi {
         let Self::Open {
             selection: (output, a, b),
             output_data,
+            config,
             ..
         } = self
         else {
@@ -363,7 +367,8 @@ impl ScreenshotUi {
 
         let data = &output_data[output];
 
-        let delta: i32 = to_physical_precise_round(data.scale, DIRECTIONAL_MOVE_PX);
+        let step = config.borrow().layout.floating_move_step;
+        let delta: i32 = to_physical_precise_round(data.scale, step);
         let delta = min(delta, min(a.y, b.y));
         a.y -= delta;
         b.y -= delta;
@@ -375,6 +380,7 @@ impl ScreenshotUi {
         let Self::Open {
             selection: (output, a, b),
             output_data,
+            config,
             ..
         } = self
         else {
@@ -383,7 +389,8 @@ impl ScreenshotUi {
 
         let data = &output_data[output];
 
-        let delta: i32 = to_physical_precise_round(data.scale, DIRECTIONAL_MOVE_PX);
+        let step = config.borrow().layout.floating_move_step;
+        let delta: i32 = to_physical_precise_round(data.scale, step);
         let delta = min(delta, data.size.h - max(a.y, b.y) - 1);
         a.y += delta;
         b.y += delta;

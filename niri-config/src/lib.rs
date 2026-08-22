@@ -49,7 +49,9 @@ pub use crate::appearance::*;
 pub use crate::binds::*;
 pub use crate::debug::Debug;
 pub use crate::error::{ConfigIncludeError, ConfigParseResult};
-pub use crate::gestures::Gestures;
+pub use crate::gestures::{
+    Gestures, PointerDrag, RubberBandParams, RubberBandPart, TouchGestures, TouchpadSwipe,
+};
 pub use crate::input::{Input, ModKey, ScrollMethod, TrackLayout, WarpMouseToFocusMode, Xkb};
 pub use crate::layer_rule::LayerRule;
 pub use crate::layout::*;
@@ -92,6 +94,7 @@ pub struct Config {
     pub debug: Debug,
     pub workspaces: Vec<Workspace>,
     pub recent_windows: RecentWindows,
+    pub timeouts: Timeouts,
 }
 
 #[derive(Debug, Clone)]
@@ -241,6 +244,11 @@ where
                 "screenshot-path" => {
                     let part = knuffel::Decode::decode_node(node, ctx)?;
                     config.borrow_mut().screenshot_path = part;
+                }
+
+                "timeouts" => {
+                    let part = TimeoutsPart::decode_node(node, ctx)?;
+                    config.borrow_mut().timeouts.merge_with(&part);
                 }
 
                 "layout" => {
@@ -1168,6 +1176,7 @@ mod tests {
                 mod_key_nested: Some(
                     Super,
                 ),
+                double_click_time_ms: 400,
             },
             outputs: Outputs(
                 [
@@ -1226,6 +1235,7 @@ mod tests {
                                 top_right: true,
                                 bottom_left: true,
                                 bottom_right: true,
+                                trigger_size: None,
                             },
                         ),
                         layout: None,
@@ -1506,6 +1516,15 @@ mod tests {
                     b: 0.25,
                     a: 1.0,
                 },
+                interactive_move_threshold: 256.0,
+                interactive_move_opacity: 0.75,
+                interactive_move_rubber_band: RubberBandParams {
+                    stiffness: 1.0,
+                    limit: 0.5,
+                },
+                floating_move_step: 50.0,
+                resize_animation_threshold: 10.0,
+                move_animation_threshold: 10.0,
             },
             prefer_no_csd: true,
             cursor: Cursor {
@@ -1557,6 +1576,7 @@ mod tests {
                         ),
                     },
                     custom_shader: None,
+                    scale_from: 0.5,
                 },
                 window_close: WindowCloseAnim {
                     anim: Animation {
@@ -1574,6 +1594,7 @@ mod tests {
                         ),
                     },
                     custom_shader: None,
+                    scale_to: 0.8,
                 },
                 horizontal_view_movement: HorizontalViewMovementAnim(
                     Animation {
@@ -1688,6 +1709,7 @@ mod tests {
                     trigger_height: 50.0,
                     delay_ms: 100,
                     max_speed: 1500.0,
+                    workspace_movement: 1500.0,
                 },
                 hot_corners: HotCorners {
                     off: false,
@@ -1695,6 +1717,30 @@ mod tests {
                     top_right: false,
                     bottom_left: false,
                     bottom_right: false,
+                    trigger_size: None,
+                },
+                touchpad_swipe: TouchpadSwipe {
+                    workspace_movement: 300.0,
+                    view_movement: 1200.0,
+                    overview_movement: 300.0,
+                    workspace_fingers: 3,
+                    overview_fingers: 4,
+                    deceleration: 0.997,
+                    velocity_window_ms: 150,
+                    workspace_rubber_band: RubberBandParams {
+                        stiffness: 0.5,
+                        limit: 0.05,
+                    },
+                    overview_rubber_band: RubberBandParams {
+                        stiffness: 0.5,
+                        limit: 0.05,
+                    },
+                },
+                pointer_drag: PointerDrag {
+                    direction_lock_distance: 8.0,
+                },
+                touch: TouchGestures {
+                    long_press_ms: 500,
                 },
             },
             overview: Overview {
@@ -1724,6 +1770,7 @@ mod tests {
                         a: 0.3137255,
                     },
                 },
+                scroll_cooldown_ms: 50,
             },
             environment: Environment(
                 [
@@ -2420,6 +2467,11 @@ mod tests {
                         hotkey_overlay_title: None,
                     },
                 ],
+                edge_peek: 192.0,
+            },
+            timeouts: Timeouts {
+                xdg_activation_token_ms: 10000,
+                lock_surface_ms: 1000,
             },
         }
         "#);

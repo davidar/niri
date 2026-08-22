@@ -41,6 +41,9 @@ pub struct ClosingWindow {
     /// Where the window should be blocked out from.
     block_out_from: Option<BlockOutFrom>,
 
+    /// Scale the window shrinks to by the end of the animation.
+    scale_to: f64,
+
     /// Size of the window geometry.
     geo_size: Size<f64, Logical>,
 
@@ -102,6 +105,7 @@ impl ClosingWindow {
         pos: Point<f64, Logical>,
         blocker: TransactionBlocker,
         anim: Animation,
+        scale_to: f64,
     ) -> anyhow::Result<Self> {
         let _span = tracy_client::span!("ClosingWindow::new");
 
@@ -147,6 +151,7 @@ impl ClosingWindow {
             buffer_with_blocked_out_bg,
             blocked_out_buffer,
             block_out_from: snapshot.block_out_from,
+            scale_to,
             geo_size,
             pos,
             buffer_offset,
@@ -286,7 +291,7 @@ impl ClosingWindow {
         let elem = RescaleRenderElement::from_element(
             elem,
             (center - offset).to_physical_precise_round(scale),
-            ((1. - clamped_progress) / 5. + 0.8).max(0.),
+            (1. - clamped_progress * (1. - self.scale_to)).max(0.),
         );
 
         let mut location = self.pos + offset;

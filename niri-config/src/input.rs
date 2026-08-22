@@ -8,7 +8,7 @@ use crate::binds::Modifiers;
 use crate::utils::{Flag, MergeWith, Percent};
 use crate::FloatOrInt;
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Input {
     pub keyboard: Keyboard,
     pub touchpad: Touchpad,
@@ -23,6 +23,29 @@ pub struct Input {
     pub workspace_auto_back_and_forth: bool,
     pub mod_key: Option<ModKey>,
     pub mod_key_nested: Option<ModKey>,
+    /// Two clicks within this many ms count as a double click.
+    pub double_click_time_ms: u16,
+}
+
+impl Default for Input {
+    fn default() -> Self {
+        Self {
+            keyboard: Default::default(),
+            touchpad: Default::default(),
+            mouse: Default::default(),
+            trackpoint: Default::default(),
+            trackball: Default::default(),
+            tablet: Default::default(),
+            touch: Default::default(),
+            disable_power_key_handling: false,
+            warp_mouse_to_focus: None,
+            focus_follows_mouse: None,
+            workspace_auto_back_and_forth: false,
+            mod_key: None,
+            mod_key_nested: None,
+            double_click_time_ms: 400,
+        }
+    }
 }
 
 #[derive(knuffel::Decode, Debug, Default, PartialEq)]
@@ -53,6 +76,8 @@ pub struct InputPart {
     pub mod_key: Option<ModKey>,
     #[knuffel(child, unwrap(argument, str))]
     pub mod_key_nested: Option<ModKey>,
+    #[knuffel(child, unwrap(argument))]
+    pub double_click_time_ms: Option<u16>,
 }
 
 impl MergeWith<InputPart> for Input {
@@ -72,6 +97,7 @@ impl MergeWith<InputPart> for Input {
             trackball,
             tablet,
             touch,
+            double_click_time_ms,
         );
 
         merge_clone_opt!(

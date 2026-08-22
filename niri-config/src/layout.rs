@@ -4,6 +4,7 @@ use niri_ipc::{ColumnDisplay, SizeChange};
 use crate::appearance::{
     Border, FocusRing, InsertHint, Shadow, TabIndicator, DEFAULT_BACKGROUND_COLOR,
 };
+use crate::gestures::{RubberBandParams, RubberBandPart};
 use crate::utils::{expect_only_children, Flag, MergeWith};
 use crate::{BorderRule, Color, FloatOrInt, InsertHintPart, ShadowRule, TabIndicatorPart};
 
@@ -24,6 +25,18 @@ pub struct Layout {
     pub gaps: f64,
     pub struts: Struts,
     pub background_color: Color,
+    /// Pointer travel (logical px) to pull a tiled window out into an interactive move.
+    pub interactive_move_threshold: f64,
+    /// Opacity of a tile while it is interactively moved over the scrolling layout.
+    pub interactive_move_opacity: f64,
+    /// Rubber-band feel while pulling a window out of the layout.
+    pub interactive_move_rubber_band: RubberBandParams,
+    /// Logical px moved per directional move action on a floating window.
+    pub floating_move_step: f64,
+    /// Size changes up to this many px don't animate.
+    pub resize_animation_threshold: f64,
+    /// Floating-window moves up to this many px don't animate.
+    pub move_animation_threshold: f64,
 }
 
 impl Default for Layout {
@@ -52,6 +65,15 @@ impl Default for Layout {
                 PresetSize::Proportion(2. / 3.),
             ],
             background_color: DEFAULT_BACKGROUND_COLOR,
+            interactive_move_threshold: 256.,
+            interactive_move_opacity: 0.75,
+            interactive_move_rubber_band: RubberBandParams {
+                stiffness: 1.0,
+                limit: 0.5,
+            },
+            floating_move_step: 50.,
+            resize_animation_threshold: 10.,
+            move_animation_threshold: 10.,
         }
     }
 }
@@ -68,6 +90,12 @@ impl MergeWith<LayoutPart> for Layout {
             always_center_single_column,
             empty_workspace_above_first,
             gaps,
+            interactive_move_threshold,
+            interactive_move_opacity,
+            interactive_move_rubber_band,
+            floating_move_step,
+            resize_animation_threshold,
+            move_animation_threshold,
         );
 
         merge_clone!(
@@ -126,6 +154,18 @@ pub struct LayoutPart {
     pub struts: Option<Struts>,
     #[knuffel(child)]
     pub background_color: Option<Color>,
+    #[knuffel(child, unwrap(argument))]
+    pub interactive_move_threshold: Option<FloatOrInt<0, 65535>>,
+    #[knuffel(child, unwrap(argument))]
+    pub interactive_move_opacity: Option<FloatOrInt<0, 1>>,
+    #[knuffel(child)]
+    pub interactive_move_rubber_band: Option<RubberBandPart>,
+    #[knuffel(child, unwrap(argument))]
+    pub floating_move_step: Option<FloatOrInt<0, 65535>>,
+    #[knuffel(child, unwrap(argument))]
+    pub resize_animation_threshold: Option<FloatOrInt<0, 65535>>,
+    #[knuffel(child, unwrap(argument))]
+    pub move_animation_threshold: Option<FloatOrInt<0, 65535>>,
 }
 
 #[derive(knuffel::Decode, Debug, Clone, Copy, PartialEq)]

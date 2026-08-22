@@ -155,6 +155,8 @@ impl Default for WorkspaceSwitchAnim {
 pub struct WindowOpenAnim {
     pub anim: Animation,
     pub custom_shader: Option<String>,
+    /// Scale the window starts opening from (1 = no scaling).
+    pub scale_from: f64,
 }
 
 impl Default for WindowOpenAnim {
@@ -168,6 +170,7 @@ impl Default for WindowOpenAnim {
                 }),
             },
             custom_shader: None,
+            scale_from: 0.5,
         }
     }
 }
@@ -176,6 +179,8 @@ impl Default for WindowOpenAnim {
 pub struct WindowCloseAnim {
     pub anim: Animation,
     pub custom_shader: Option<String>,
+    /// Scale the window shrinks to while closing (1 = no scaling).
+    pub scale_to: f64,
 }
 
 impl Default for WindowCloseAnim {
@@ -189,6 +194,7 @@ impl Default for WindowCloseAnim {
                 }),
             },
             custom_shader: None,
+            scale_to: 0.8,
         }
     }
 }
@@ -381,9 +387,13 @@ where
     ) -> Result<Self, DecodeError<S>> {
         let default = Self::default().anim;
         let mut custom_shader = None;
+        let mut scale_from = Self::default().scale_from;
         let anim = Animation::decode_node(node, ctx, default, |child, ctx| {
             if &**child.node_name == "custom-shader" {
                 custom_shader = parse_arg_node("custom-shader", child, ctx)?;
+                Ok(true)
+            } else if &**child.node_name == "scale-from" {
+                scale_from = parse_arg_node::<_, FloatOrInt<0, 100>>("scale-from", child, ctx)?.0;
                 Ok(true)
             } else {
                 Ok(false)
@@ -393,6 +403,7 @@ where
         Ok(Self {
             anim,
             custom_shader,
+            scale_from,
         })
     }
 }
@@ -407,9 +418,13 @@ where
     ) -> Result<Self, DecodeError<S>> {
         let default = Self::default().anim;
         let mut custom_shader = None;
+        let mut scale_to = Self::default().scale_to;
         let anim = Animation::decode_node(node, ctx, default, |child, ctx| {
             if &**child.node_name == "custom-shader" {
                 custom_shader = parse_arg_node("custom-shader", child, ctx)?;
+                Ok(true)
+            } else if &**child.node_name == "scale-to" {
+                scale_to = parse_arg_node::<_, FloatOrInt<0, 100>>("scale-to", child, ctx)?.0;
                 Ok(true)
             } else {
                 Ok(false)
@@ -419,6 +434,7 @@ where
         Ok(Self {
             anim,
             custom_shader,
+            scale_to,
         })
     }
 }

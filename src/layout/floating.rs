@@ -28,8 +28,6 @@ use crate::utils::{
 };
 use crate::window::ResolvedWindowRules;
 
-/// By how many logical pixels the directional move commands move floating windows.
-pub const DIRECTIONAL_MOVE_PX: f64 = 50.;
 
 /// Space for floating windows.
 #[derive(Debug)]
@@ -625,7 +623,14 @@ impl<W: LayoutElement> FloatingSpace<W> {
 
         let scale = Scale::from(self.scale);
         let res = ClosingWindow::new(
-            renderer, snapshot, scale, tile_size, tile_pos, blocker, anim,
+            renderer,
+            snapshot,
+            scale,
+            tile_size,
+            tile_pos,
+            blocker,
+            anim,
+            self.options.animations.window_close.scale_to,
         );
         match res {
             Ok(closing) => {
@@ -946,19 +951,23 @@ impl<W: LayoutElement> FloatingSpace<W> {
     }
 
     pub fn move_left(&mut self) {
-        self.move_by(Point::from((-DIRECTIONAL_MOVE_PX, 0.)));
+        let step = self.options.layout.floating_move_step;
+        self.move_by(Point::from((-step, 0.)));
     }
 
     pub fn move_right(&mut self) {
-        self.move_by(Point::from((DIRECTIONAL_MOVE_PX, 0.)));
+        let step = self.options.layout.floating_move_step;
+        self.move_by(Point::from((step, 0.)));
     }
 
     pub fn move_up(&mut self) {
-        self.move_by(Point::from((0., -DIRECTIONAL_MOVE_PX)));
+        let step = self.options.layout.floating_move_step;
+        self.move_by(Point::from((0., -step)));
     }
 
     pub fn move_down(&mut self) {
-        self.move_by(Point::from((0., DIRECTIONAL_MOVE_PX)));
+        let step = self.options.layout.floating_move_step;
+        self.move_by(Point::from((0., step)));
     }
 
     pub fn move_window(
@@ -1243,7 +1252,7 @@ impl<W: LayoutElement> FloatingSpace<W> {
 
     fn move_and_animate(&mut self, idx: usize, new_pos: Point<f64, Logical>) {
         // Moves up to this logical pixel distance are not animated.
-        const ANIMATION_THRESHOLD_SQ: f64 = 10. * 10.;
+        let animation_threshold_sq = self.options.layout.move_animation_threshold.powi(2);
 
         let tile = &mut self.tiles[idx];
         let data = &mut self.data[idx];
@@ -1253,7 +1262,7 @@ impl<W: LayoutElement> FloatingSpace<W> {
         let new_pos = data.logical_pos;
 
         let diff = prev_pos - new_pos;
-        if diff.x * diff.x + diff.y * diff.y > ANIMATION_THRESHOLD_SQ {
+        if diff.x * diff.x + diff.y * diff.y > animation_threshold_sq {
             tile.animate_move_from(prev_pos - new_pos);
         }
     }
