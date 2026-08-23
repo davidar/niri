@@ -4684,9 +4684,18 @@ impl Niri {
         }
 
         // If we're in process of locking the session, check if the requirements were met.
+        let render_skipped = res == RenderResult::Skipped && self.monitors_active;
         match mem::take(&mut self.lock_state) {
             LockState::Locking(confirmation) => {
-                if state.lock_render_state == LockRenderState::Unlocked {
+                if render_skipped {
+                    // Nothing was rendered, so this output's lock state is unknown rather
+                    // than unlocked. This happens when the session is being paused (DRM
+                    // master already revoked for suspend or a VT switch) while a lock is in
+                    // flight: the locker asked to lock because the machine is going to sleep,
+                    // and giving up here would wake it up unlocked. Keep waiting; the redraw
+                    // on resume (or the next damage) decides.
+                    self.lock_state = LockState::Locking(confirmation);
+                } else if state.lock_render_state == LockRenderState::Unlocked {
                     // We needed to render a locked frame on this output but failed.
                     self.unlock();
                 } else {
