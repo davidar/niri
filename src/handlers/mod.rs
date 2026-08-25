@@ -630,7 +630,6 @@ impl ImageCaptureSourceHandler for State {
     }
 }
 
-smithay::delegate_image_capture_source!(State);
 
 impl OutputCaptureSourceHandler for State {
     fn output_capture_source_state(&mut self) -> &mut OutputCaptureSourceState {
@@ -642,7 +641,6 @@ impl OutputCaptureSourceHandler for State {
     }
 }
 
-smithay::delegate_output_capture_source!(State);
 
 impl ImageCopyCaptureHandler for State {
     fn image_copy_capture_state(&mut self) -> &mut ImageCopyCaptureState {
@@ -725,7 +723,6 @@ impl ImageCopyCaptureHandler for State {
     }
 }
 
-smithay::delegate_image_copy_capture!(State);
 
 /// Render output content into a buffer for the image copy capture protocol.
 fn render_output_capture(
