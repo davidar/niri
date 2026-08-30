@@ -85,7 +85,7 @@ use smithay::wayland::idle_inhibit::IdleInhibitManagerState;
 use smithay::wayland::idle_notify::IdleNotifierState;
 use smithay::wayland::image_capture_source::ImageCaptureSourceState;
 use smithay::wayland::image_capture_source::OutputCaptureSourceState;
-use smithay::wayland::image_copy_capture::ImageCopyCaptureState;
+use smithay::wayland::image_copy_capture::{ImageCopyCaptureState, Session};
 use smithay::wayland::input_method::InputMethodManagerState;
 use smithay::wayland::keyboard_shortcuts_inhibit::{
     KeyboardShortcutsInhibitState, KeyboardShortcutsInhibitor,
@@ -287,6 +287,7 @@ pub struct Niri {
     pub image_capture_source_state: ImageCaptureSourceState,
     pub output_capture_source_state: OutputCaptureSourceState,
     pub image_copy_capture_state: ImageCopyCaptureState,
+    pub image_copy_sessions: Vec<Session>,
     pub toplevel_image_capture_state: ToplevelImageCaptureManagerState,
     pub ext_workspace_state: ExtWorkspaceManagerState,
     pub screencopy_state: ScreencopyManagerState,
@@ -2574,6 +2575,7 @@ impl Niri {
             image_capture_source_state,
             output_capture_source_state,
             image_copy_capture_state,
+            image_copy_sessions: Vec::new(),
             toplevel_image_capture_state,
             ext_workspace_state,
             output_management_state,

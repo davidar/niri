@@ -691,8 +691,14 @@ impl ImageCopyCaptureHandler for State {
         None
     }
 
-    fn new_session(&mut self, _session: Session) {
-        // Sessions clean up when dropped
+    fn new_session(&mut self, session: Session) {
+        // Dropping an owned Session sends `stopped` and kills it, so hold on
+        // to it until the client destroys the session object.
+        self.niri.image_copy_sessions.push(session);
+    }
+
+    fn session_destroyed(&mut self, session: SessionRef) {
+        self.niri.image_copy_sessions.retain(|s| *s != session);
     }
 
     fn frame(&mut self, session: &SessionRef, frame: Frame) {
