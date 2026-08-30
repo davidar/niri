@@ -660,6 +660,8 @@ impl ImageCopyCaptureHandler for State {
                 shm: vec![
                     smithay::reexports::wayland_server::protocol::wl_shm::Format::Argb8888,
                     smithay::reexports::wayland_server::protocol::wl_shm::Format::Xrgb8888,
+                    smithay::reexports::wayland_server::protocol::wl_shm::Format::Abgr8888,
+                    smithay::reexports::wayland_server::protocol::wl_shm::Format::Xbgr8888,
                 ],
                 dma: None,
             });
@@ -683,6 +685,8 @@ impl ImageCopyCaptureHandler for State {
                 shm: vec![
                     smithay::reexports::wayland_server::protocol::wl_shm::Format::Argb8888,
                     smithay::reexports::wayland_server::protocol::wl_shm::Format::Xrgb8888,
+                    smithay::reexports::wayland_server::protocol::wl_shm::Format::Abgr8888,
+                    smithay::reexports::wayland_server::protocol::wl_shm::Format::Xbgr8888,
                 ],
                 dma: None,
             });
