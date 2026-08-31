@@ -1814,6 +1814,7 @@ mod tests {
                             is_floating: None,
                             is_window_cast_target: None,
                             is_urgent: None,
+                            has_sibling: None,
                             at_startup: None,
                         },
                     ],
@@ -1833,6 +1834,7 @@ mod tests {
                             is_floating: None,
                             is_window_cast_target: None,
                             is_urgent: None,
+                            has_sibling: None,
                             at_startup: None,
                         },
                         Match {
@@ -1848,6 +1850,7 @@ mod tests {
                             is_floating: None,
                             is_window_cast_target: None,
                             is_urgent: None,
+                            has_sibling: None,
                             at_startup: None,
                         },
                     ],

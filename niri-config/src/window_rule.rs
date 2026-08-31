@@ -138,6 +138,8 @@ pub struct Match {
     #[knuffel(property)]
     pub is_urgent: Option<bool>,
     #[knuffel(property)]
+    pub has_sibling: Option<bool>,
+    #[knuffel(property)]
     pub at_startup: Option<bool>,
 }
 

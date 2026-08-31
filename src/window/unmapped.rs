@@ -10,6 +10,10 @@ use super::ResolvedWindowRules;
 pub struct Unmapped {
     pub window: Window,
     pub state: InitialConfigureState,
+    /// Whether the window's client already had a mapped window when this one appeared.
+    ///
+    /// Fixed for the window's lifetime so that rules matching on it are stable.
+    pub has_sibling: bool,
     /// Activation token, if one was used on this unmapped window.
     pub activation_token_data: Option<XdgActivationTokenData>,
 }
@@ -79,9 +83,10 @@ pub enum InitialConfigureState {
 
 impl Unmapped {
     /// Wraps a newly created window that hasn't been initially configured yet.
-    pub fn new(window: Window) -> Self {
+    pub fn new(window: Window, has_sibling: bool) -> Self {
         Self {
             window,
+            has_sibling,
             state: InitialConfigureState::NotConfigured {
                 wants_fullscreen: None,
                 wants_maximized: false,

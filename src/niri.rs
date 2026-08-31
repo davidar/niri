@@ -6385,6 +6385,20 @@ impl Niri {
         // bit, and even if the delay was zero, we're drawing the same contents anyway.
     }
 
+    /// Returns whether the client owning `surface` has another window already mapped.
+    ///
+    /// Used for the `has-sibling` window-rule matcher: a window appearing while its client
+    /// already shows one (a browser's extension popout, a web page's popup) is usually
+    /// subordinate to it, even when the client does not set an xdg parent.
+    pub fn client_has_mapped_window(&self, surface: &WlSurface) -> bool {
+        let Some(client) = surface.client() else {
+            return false;
+        };
+        self.layout.windows().any(|(_, mapped)| {
+            mapped.toplevel().wl_surface().client().as_ref() == Some(&client)
+        })
+    }
+
     pub fn recompute_window_rules(&mut self) {
         let _span = tracy_client::span!("Niri::recompute_window_rules");
 

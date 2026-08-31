@@ -180,6 +180,13 @@ impl<'a> WindowRef<'a> {
             WindowRef::Mapped(mapped) => mapped.is_window_cast_target(),
         }
     }
+
+    pub fn has_sibling(self) -> bool {
+        match self {
+            WindowRef::Unmapped(unmapped) => unmapped.has_sibling,
+            WindowRef::Mapped(mapped) => mapped.has_sibling(),
+        }
+    }
 }
 
 impl ResolvedWindowRules {
@@ -448,6 +455,12 @@ fn window_matches(window: WindowRef, role: &XdgToplevelSurfaceRoleAttributes, m:
 
     if let Some(is_window_cast_target) = m.is_window_cast_target {
         if window.is_window_cast_target() != is_window_cast_target {
+            return false;
+        }
+    }
+
+    if let Some(has_sibling) = m.has_sibling {
+        if window.has_sibling() != has_sibling {
             return false;
         }
     }

@@ -100,6 +100,9 @@ pub struct Mapped {
     /// Whether this window is a target of a window cast.
     is_window_cast_target: bool,
 
+    /// Whether the window's client already had a mapped window when this one appeared.
+    has_sibling: bool,
+
     /// Whether this window should ignore opacity set through window rules.
     ignore_opacity_window_rule: bool,
 
@@ -272,13 +275,20 @@ enum RequestSizeOnce {
 }
 
 impl Mapped {
-    pub fn new(window: Window, rules: ResolvedWindowRules, hook: HookId, config: &Config) -> Self {
+    pub fn new(
+        window: Window,
+        rules: ResolvedWindowRules,
+        hook: HookId,
+        config: &Config,
+        has_sibling: bool,
+    ) -> Self {
         let surface = window.wl_surface().expect("no X11 support");
         let credentials = get_credentials_for_surface(&surface);
         let mut rv = Self {
             window,
             id: MappedId::next(),
             credentials,
+            has_sibling,
             pre_commit_hook: hook,
             rules,
             need_to_recompute_rules: false,
@@ -361,6 +371,10 @@ impl Mapped {
 
     pub fn credentials(&self) -> Option<&Credentials> {
         self.credentials.as_ref()
+    }
+
+    pub fn has_sibling(&self) -> bool {
+        self.has_sibling
     }
 
     pub fn offscreen_data(&self) -> Ref<'_, Option<OffscreenData>> {
