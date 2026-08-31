@@ -309,12 +309,17 @@ pub fn render_to_shm(
     let _span = tracy_client::span!();
     shm::with_buffer_contents_mut(buffer, |shm_buffer, shm_len, buffer_data| {
         let (size, _scale, _transform) = damage_tracker.mode().try_into().unwrap();
-        let fourcc = Fourcc::Xrgb8888;
+        // The buffer prefers pixels in little endian ...
+        let fourcc = match buffer_data.format {
+            wl_shm::Format::Xrgb8888 => Fourcc::Xrgb8888,
+            wl_shm::Format::Argb8888 => Fourcc::Argb8888,
+            wl_shm::Format::Xbgr8888 => Fourcc::Xbgr8888,
+            wl_shm::Format::Abgr8888 => Fourcc::Abgr8888,
+            format => anyhow::bail!("unsupported shm buffer format {format:?}"),
+        };
 
         ensure!(
-            // The buffer prefers pixels in little endian ...
-            buffer_data.format == wl_shm::Format::Xrgb8888
-                && buffer_data.width == size.w
+            buffer_data.width == size.w
                 && buffer_data.height == size.h
                 && buffer_data.stride == size.w * 4
                 && shm_len == buffer_data.stride as usize * buffer_data.height as usize,
