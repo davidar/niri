@@ -296,26 +296,86 @@ mod systemd {
                             let _ = write_all(pipe, &grandchild_pid.to_ne_bytes());
                         }
 
-                        // Wait until the parent signals us to exit.
+                        // Wait until the parent signals us to exit, or until the grandchild
+                        // exits on its own.
+                        //
+                        // The latter matters when exec fails: std's Command::spawn() in the
+                        // parent learns about the failure through its exec-error pipe and then
+                        // waitpid()s us before returning. If we only waited for the parent's
+                        // signal (which it sends after spawn() returns), the spawner thread
+                        // would deadlock, we would linger forever, and the failure would never
+                        // be logged.
                         if let Some(pipe) = pipe_wait_read {
+                            let raw = pipe.as_raw_fd();
+
+                            #[cfg(target_os = "linux")]
+                            let pidfd = {
+                                let fd = libc::syscall(libc::SYS_pidfd_open, grandchild_pid, 0);
+                                (fd >= 0).then_some(fd as libc::c_int)
+                            };
+                            #[cfg(not(target_os = "linux"))]
+                            let pidfd: Option<libc::c_int> = None;
+
                             // We're going to exit afterwards. Close all other FDs to allow
                             // Command::spawn() to return in the parent process.
+                            let mut keep = [raw, pidfd.unwrap_or(raw)];
+                            keep.sort_unstable();
+                            let (lo, hi) = (keep[0], keep[1]);
                             #[cfg(not(target_os = "openbsd"))]
                             {
-                                let raw = pipe.as_raw_fd() as u32;
-                                let _ = close_range(0, raw - 1, 0);
-                                let _ = close_range(raw + 1, !0, 0);
+                                let (lo, hi) = (lo as u32, hi as u32);
+                                if lo > 0 {
+                                    let _ = close_range(0, lo - 1, 0);
+                                }
+                                if hi > lo + 1 {
+                                    let _ = close_range(lo + 1, hi - 1, 0);
+                                }
+                                let _ = close_range(hi + 1, !0, 0);
                             }
                             #[cfg(target_os = "openbsd")]
                             {
-                                let raw = pipe.as_raw_fd();
-                                for fd in 0..raw {
-                                    close(fd);
+                                for fd in 0..hi {
+                                    if fd != lo {
+                                        close(fd);
+                                    }
                                 }
-                                closefrom(raw + 1);
+                                closefrom(hi + 1);
                             }
 
-                            let _ = read_all(pipe, &mut [0]);
+                            match pidfd {
+                                Some(pidfd) => {
+                                    // The pipe reports POLLHUP once the parent drops its end;
+                                    // the pidfd becomes readable once the grandchild exits.
+                                    let mut fds = [
+                                        libc::pollfd {
+                                            fd: raw,
+                                            events: libc::POLLIN,
+                                            revents: 0,
+                                        },
+                                        libc::pollfd {
+                                            fd: pidfd,
+                                            events: libc::POLLIN,
+                                            revents: 0,
+                                        },
+                                    ];
+                                    loop {
+                                        let ret = libc::poll(
+                                            fds.as_mut_ptr(),
+                                            fds.len() as libc::nfds_t,
+                                            -1,
+                                        );
+                                        if ret >= 0
+                                            || io::Error::last_os_error().raw_os_error()
+                                                != Some(libc::EINTR)
+                                        {
+                                            break;
+                                        }
+                                    }
+                                }
+                                None => {
+                                    let _ = read_all(pipe, &mut [0]);
+                                }
+                            }
                         }
 
                         libc::_exit(0)
@@ -481,5 +541,25 @@ mod systemd {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    use super::*;
+
+    /// A command that fails to exec must not hang the spawner or leak the intermediate child.
+    #[test]
+    fn failed_exec_returns() {
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            spawn_sync("/nonexistent/niri-spawn-test", Vec::<&OsStr>::new(), None);
+            let _ = tx.send(());
+        });
+        rx.recv_timeout(Duration::from_secs(10))
+            .expect("spawning a nonexistent command hung instead of failing");
     }
 }
